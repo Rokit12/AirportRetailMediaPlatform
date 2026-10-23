@@ -60,9 +60,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .body.split { grid-template-columns: minmax(380px, 40%) 1fr; }
 .side { background: var(--surface); border-right: 1px solid var(--line); padding: 14px 10px; overflow: auto; }
 .side h4 { margin: 4px 8px 10px; font-size: 12px; color: var(--muted); font-weight: 600; }
-.side button { display: flex; width: 100%; text-align: left; background: none; border: 0; padding: 8px 10px; border-radius: var(--r-s); cursor: pointer; color: var(--text); gap: 8px; align-items: center; }
-.side button:hover { background: var(--surface-2); }
-.side button[aria-current='page'] { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--signal); font-weight: 600; }
+.side > button { display: flex; width: 100%; text-align: left; background: none; border: 0; padding: 8px 10px; border-radius: var(--r-s); cursor: pointer; color: var(--text); gap: 8px; align-items: center; }
+.side > button:hover { background: var(--surface-2); }
+.side > button[aria-current='page'] { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--signal); font-weight: 600; }
 .side .company { margin: 14px 8px 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; }
 .main { overflow: auto; padding: 18px 22px 40px; min-width: 0; }
 .page-h { display: flex; align-items: baseline; gap: 12px; margin: 0 0 14px; }

@@ -176,6 +176,7 @@ const SW = {
 // Engine-generated sentences. Order matters: longer, more specific patterns first. `$n` keeps data values.
 const D = (s) => s.replace(/delayed (\d+) min/g, 'imechelewa dak $1').replace(/ boarding\b/g, ' inapanda').replace(/gate change/g, 'badiliko la geti');
 const PATTERNS_SW = [
+  [/^([\d,]+) passengers · top destinations (.+)$/, (m) => `abiria ${m[1]} · maeneo makuu ${m[2]}`],
   [/^(\d+) min$/, (m) => `dak ${m[1]}`],
   [/^Security queue: (\d+) min wait$/, (m) => `Foleni ya ukaguzi: dak ${m[1]} kusubiri`],
   [/^(\S+) · gate (\S+)$/, (m) => `${m[1]} · geti ${m[2]}`],
