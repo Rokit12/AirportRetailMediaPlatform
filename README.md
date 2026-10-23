@@ -48,33 +48,21 @@ There is no login. Use the role switcher in the header. The Retailer and Airline
 
 | Role | Pages | Highlights |
 |---|---|---|
-| **Platform Admin** (dark control-room theme) | Overview · Decision engine · Master data · Incidents · Data feeds | Live SVG network map of T1/T2 with every screen coloured online/degraded/offline and a passenger heat overlay. KPI strip (screens online %, plays, impressions, revenue in configurable currency, active campaigns, latency). Auto-raised incidents (screen offline > 5 min, feed lag, failed creative, AI rejection) with severity, owner and status. Full create/edit for terminals, vendors, outlets, airlines, zones, gates and screens; a new terminal is onboarded with its zones and appears on the map. Read-only views of gate assignments and aircraft types. Rule-engine settings and a searchable decision log with evidence drawer. Feed health, raw message stream, and a box to paste any AIDX XML through the adapter. API p95, playlist build time, 7-day uptime. |
-| **Retailer** | Dashboard · Campaigns · Creatives · Promo codes · History | Live impressions, scans, redemptions, conversion and revenue. Passenger flow near the store for the next 2 h ("Next 60 min: 2,692 pax, 67% international, top: ZHQ, LMW, SMG"). Campaign builder with live audience-match preview ("Matches 64% of the crowd at … expected 3,100 impressions and 95 redemptions"), mock-screen preview, trigger rules, schedule, budget and "best 3 slots tomorrow". Performance by segment ("Families redeemed 3.2x their share") with one-click weight suggestions. Impression log per screen and hour. A/B creatives, budget pacing, out-of-stock toggle (pauses the promo network-wide). GenAI creative assistant in EN + Kiswahili. A creative that fails on screens is flagged in the library with a one-click re-upload. Time-boxed codes, history with ROI and "run again". |
-| **Media Manager** | Inventory · Approvals · Advertisers · Matching · Packages | Screen × hour calendar (available / partly booked / premium / sold) with a suggested price per cell driven by predicted presence. 7-day occupancy and revenue forecast, plus a price book. Approval queue for campaigns and stand-alone creatives, with automatic creative checks (template, both languages, contrast, asset loads) and a brand-safety checklist. Top advertisers, under-delivery flags, one-click printable/shareable report. Segment × hour heatmap per zone, an A-vs-B conflict explainer, manual pin/override with a logged reason, and a package builder. |
+| **Platform Admin** (dark control-room theme) | Overview · Decision engine · Master data · Incidents & feeds | Passenger presence per zone for the current 5-minute window (count, international share, nationalities, destinations, dwell). Live SVG network map of T1/T2 with every screen coloured online/degraded/offline and a passenger heat overlay. KPI strip (screens online %, plays, impressions, revenue in configurable currency, active campaigns, latency). Auto-raised incidents (screen offline > 5 min, feed lag, failed creative, AI rejection) with severity, owner and status. Full create/edit for terminals, vendors, outlets, airlines, zones, gates and screens; a new terminal is onboarded with its zones and appears on the map. Read-only views of gate assignments and aircraft types. Rule-engine settings and a searchable decision log with evidence drawer. Feed health, raw message stream, and a box to paste any AIDX XML through the adapter. API p95, playlist build time, 7-day uptime. |
+| **Retailer** | Dashboard · Campaigns & history · Creatives & promo codes | Live impressions, scans, redemptions, conversion and revenue for the selected outlet (or all outlets). Passenger flow near the store for the next 2 h ("Next 60 min: 2,692 pax, 67% international, top: ZHQ, LMW, SMG"). Campaign builder (placement by zones, screens or gates; destination, domestic/international, dwell, crowd and delay rules; delay, gate-change, boarding and festival triggers) with live audience-match preview ("Matches 64% of the crowd at … expected 3,100 impressions and 95 redemptions"), mock-screen preview, trigger rules, schedule, budget and "best 3 slots tomorrow". Performance by segment ("Families redeemed 3.2x their share") with one-click weight suggestions. Impression log per screen and hour. A/B creatives, budget pacing, out-of-stock toggle (pauses the promo network-wide). GenAI creative assistant in EN + Kiswahili. Image upload for ready-made ad pages. A creative that fails on screens is flagged in the library with a one-click re-upload. Time-boxed codes, history with ROI and "run again". |
+| **Media Manager** | Inventory & yield (with packages) · Approvals · Advertisers & reports · Matching | Screen × hour calendar (available / partly booked / premium / sold) with a suggested price per cell driven by predicted presence. 7-day occupancy and revenue forecast, plus a price book. Approval queue for campaigns and stand-alone creatives, with automatic creative checks (template, both languages, contrast, asset loads) and a brand-safety checklist. Top advertisers, under-delivery flags, one-click printable/shareable report. Segment × hour heatmap per zone, an A-vs-B conflict explainer, manual pin/override with a logged reason, and a package builder. |
 | **Airline Rep** | My flights · Gate messaging · Delay goodwill · Partners | Departures list and day timeline (delays in amber), aggregated crowd profile of their passengers. Sponsored content restricted to their own boarding window. "What played at my gates and why". Delay goodwill automation: past a threshold, a meal voucher co-funded with an F&B partner is auto-pushed to that gate with airline priority. Co-marketing marketplace ranked by fit, accepted in one click. Performance. |
-| **Passenger** | Screen simulator | Any of the 182 screens in 16:9 or 9:16. FIDS strip of nearby departures, bilingual rotation, QR with a live countdown that expires when the linked flight closes boarding, and the "Why this ad?" overlay. |
+| **Passenger** | Screen simulator | Any of the 182 screens in 16:9 or 9:16. FIDS strip of nearby departures, bilingual rotation, QR with a live countdown that expires when the linked flight closes boarding, and the "Why this ad?" overlay with the full crowd profile (crowd now and in 30 minutes, purpose, party, age bands, gender, cabin tier, nationalities, languages, destinations, dwell, delay). |
 
 The **simulation bar** is visible to all roles: play/pause, 1x/10x/60x, jump to time, "inject event" (delay, gate change, screen offline, feed lag, failed creative, AI hallucination), worked example, and reset.
 
 ## 3. Architecture
 
-```
-            ┌────────────── adapters (only place that knows source formats) ──────────────┐
-AODB CSV ──▶│ AodbCsvAdapter / VendorApiAodbSource      ─┐                                 │
-AIDX XML ──▶│ MockAidxFeed / VendorAidxFeed  (stream)    ├─▶ canonical model ─▶ ZonePresence │
-NGSI-LD  ──▶│ MockAcrisFeed / OrionLdAcrisFeed           ─┘   Flight, FlightEvent,          │
-            └──────────────────────────────────────────────── QueueMeasurement ────────────┘
-                                                                     │
-         Decision pipeline per screen per 15 s slot:  Profile → Filter → Score (AI agent)
-         → Verify (deterministic) → Business rules → Choose & log → Learn
-                                                                     │
-      @gateline/core  (engine + read models + REST route table, zero dependencies)
-            │                                            │
-   apps/server (Fastify, SQLite, SSE)              apps/web (React, Vite)
-   REST /api/*, /api/stream, OpenAPI               role dashboards, passenger screen, claim page
-```
+![Gateline architecture](docs/architecture.png)
 
-More detail, including a Mermaid diagram, the decision pipeline and the data model, is in [`docs/architecture.md`](docs/architecture.md).
+*(Vector version: [`docs/architecture.svg`](docs/architecture.svg).)*
+
+More detail, including the decision pipeline diagram and the data model, is in [`docs/architecture.md`](docs/architecture.md).
 
 **Stack and why.**
 - **Node 22 + Fastify** for the backend. Both are widely used and actively maintained, Fastify is fast and has first-class schemas, and Node 22 ships `node:sqlite` so there is no native build step.
@@ -82,7 +70,7 @@ More detail, including a Mermaid diagram, the decision pipeline and the data mod
 - **React 18 + Vite** for the frontend. This is the most common modern web stack.
 - **Server-Sent Events** for live updates. They are one-way, proxy-friendly, and auto-reconnect.
 
-The core is plain ES modules with no dependencies, so **the identical engine, adapters and route table run in Node and in the browser**. That is how the hosted playground works without a server.
+The core is plain ES modules with no dependencies, so **the identical engine, adapters and route table run in Node and in the browser**. That is also how the static demo build (`npm run build:static`) runs without a server.
 
 **Separation.** The frontend talks only to the REST API and the SSE stream. Business logic never sees CSV columns, XML or NGSI-LD: adapters translate into the canonical model (`packages/core/src/model.js`).
 
@@ -103,6 +91,9 @@ Each source is switched with **one config value**: `AODB_SOURCE=mock-csv|vendor-
 **Crowd profiles** are aggregated shares per flight: trip purpose, party type, age band, gender, cabin/spend tier, frequent-flyer share, top nationalities and languages, dwell, delay and crowd size. They follow plausibility rules: weekday peaks skew business 25–44, while Friday evening and holiday routes skew families and couples. The mid-term school break and the festival in the event calendar raise families and VFR. Profiles are rolled up per screen, weighted by gate proximity and time to boarding.
 
 ## 5. AI decision pipeline (evidence-first)
+
+![Evidence-first decision pipeline](docs/decision-pipeline.png)
+
 
 1. **Profile.** The crowd for the screen's catchment is computed from flights at nearby gates (pax × airside curve) and ACRIS queue data.
 2. **Filter.** Each campaign is checked against hard rules: schedule and daypart, placement, approval, stock, budget, domestic/international, region and destination, dwell, crowd size, brand safety (adult products are kept away from family-heavy crowds), own boarding window for airlines, and goodwill binding.

@@ -30,13 +30,21 @@ export function live(e) {
 }
 
 // ---------- presence & flow ----------
-export function zonePresenceNow(e) {
-  const idx = e.presence(e.t);
-  return e.layout.zones.map((z) => {
-    let n = sum(zoneContribs(idx, z, e.gatesByZone), (c) => c.n);
-    if (z.kind === 'checkpoint') n = e.queues[z.terminal]?.occupancy || 0;
-    return { id: z.id, name: z.name, terminal: z.terminal, kind: z.kind, x: z.x, y: z.y, n: Math.round(n) };
-  });
+/** ZonePresence: the derived signal behind every decision and KPI. One record per zone per 5-minute window:
+ *  passenger count, domestic/international split, top nationalities and destinations, median dwell, plus the
+ *  ACRIS queue gauge for checkpoint zones. */
+function zpRecord(e, z, idx, t) {
+  const p = aggregate(zoneContribs(idx, z, e.gatesByZone), t); const q = z.kind === 'checkpoint' ? e.queues[z.terminal] : null;
+  return { zone: z.id, name: z.name, terminal: z.terminal, kind: z.kind, x: z.x, y: z.y, windowStart: Math.floor(t / (5 * MIN)) * 5 * MIN, windowMinutes: 5,
+    n: q ? q.occupancy : p.n, intl: round(p.shares.intl, 3), domestic: round(p.shares.domestic, 3), medianDwell: p.medianDwell,
+    topNat: p.topNat.map(([k, v]) => [k, round(v, 3)]), topDest: p.topDest.map(([k, v]) => [k, AIRPORTS[k]?.city || k, round(v, 3)]),
+    queue: q ? { occupancy: q.occupancy, waitMin: Math.round(q.waitSec / 60), throughputPerHour: q.throughputPerHour, source: 'ACRIS', at: q.at } : null, sources: q ? ['AODB', 'AIDX', 'ACRIS'] : ['AODB', 'AIDX'] };
+}
+export function zonePresenceNow(e) { const idx = e.presence(e.t); return e.layout.zones.map((z) => zpRecord(e, z, idx, e.t)); }
+export function zonePresenceWindows(e, { zone, hours = 2 } = {}) {
+  const zones = e.layout.zones.filter((z) => !zone || z.id === zone); const out = [];
+  for (let m = 0; m <= hours * 60; m += 5) { const t = e.t + m * MIN; const idx = presenceIndex(e.flightArr, t, e.queues); for (const z of zones) out.push(zpRecord(e, z, idx, t)); }
+  return out;
 }
 export function gatePresenceNow(e) { const idx = e.presence(e.t); return Object.fromEntries([...idx.gate.entries()].map(([g, l]) => [g, Math.round(sum(l, (c) => c.n))])); }
 /** Footfall in a zone for the next `mins`, plus who is coming (from upcoming departures). */
@@ -142,6 +150,7 @@ function hardFilterLite(c, p, f) {
   if (f.minDwell && p.medianDwell < f.minDwell) return 'Dwell too short'; if (f.minCrowd && p.n < f.minCrowd) return 'Crowd too small';
   if (f.regions?.length && f.regions.reduce((a, k) => a + (p.regions[k] || 0), 0) < 0.2) return 'Destination region not present';
   if (f.minDelay && p.maxDelay < f.minDelay) return 'No qualifying delay';
+  if (f.destinations?.length && p.flights.filter((x) => f.destinations.includes(x.dest)).reduce((a, x) => a + x.n, 0) / Math.max(1, p.n) < 0.2) return 'Destination not present';
   return null;
 }
 /** Smart recommendation: best 3 (screen, hour) slots tomorrow for a campaign. */
@@ -167,13 +176,27 @@ export function recommendSlots(e, draft) {
 }
 
 // ---------- retailer ----------
-export function retailerDashboard(e, advId) {
-  const camps = e.campaigns.filter((c) => c.advertiserId === advId || c.partnerId === advId);
-  const L = live(e).adv[advId] || { imps: 0, scans: 0, red: 0, revenue: 0, spend: 0, plays: 0 };
-  const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, imps: Math.round(sum(camps, (c) => e.cnt.camp.get(c.id)?.hourly[h].imps || 0)), red: round(sum(camps, (c) => e.cnt.camp.get(c.id)?.hourly[h].red || 0), 1) }));
-  const playing = [...e.screenState.entries()].filter(([, st]) => camps.some((c) => c.id === st.now?.campaignId)).map(([id, st]) => ({ screenId: id, name: e.screens.get(id).name, campaignId: st.now.campaignId, n: st.now.n, since: st.now.since }));
-  const red = e.liveRedemptions.filter((r) => (r.advertiserId === advId || camps.some((c) => c.id === r.campaignId)) && r.t >= e.dayStart).slice(-15).reverse();
-  return { advertiser: e.advertisers.find((a) => a.id === advId), kpis: { ...L, conversion: L.scans ? round(L.red / L.scans, 3) : 0, ctr: L.imps ? round(L.scans / L.imps * 1000, 2) : 0 }, hourly, playing, recentRedemptions: red, outlets: e.outlets.filter((o) => o.advertiserId === advId), campaigns: camps.map((c) => ({ id: c.id, name: c.name, status: c.status, kind: c.kind, ...campaignStats(e, c).today })) };
+/** Attribute each screen to the advertiser's nearest outlet (same terminal first), so KPIs can be shown per outlet. */
+export function outletForScreen(e, advId, screenId) {
+  const s = e.screens.get(screenId); if (!s) return null; const outs = e.outlets.filter((o) => o.advertiserId === advId); if (!outs.length) return null;
+  const same = outs.filter((o) => o.terminal === s.terminal); const pool = same.length ? same : outs;
+  return pool.reduce((best, o) => { const d = (o.x - s.x) ** 2 + (o.y - s.y) ** 2; return !best || d < best.d ? { o, d } : best; }, null).o.id;
+}
+export function retailerDashboard(e, advId, outletId) {
+  const camps = e.campaigns.filter((c) => c.advertiserId === advId || c.partnerId === advId); const ids = new Set(camps.map((c) => c.id));
+  const outlet = outletId ? e.outlets.find((o) => o.id === outletId && o.advertiserId === advId) : null;
+  const inOutlet = (sid) => !outlet || outletForScreen(e, advId, sid) === outlet.id;
+  const rows = []; for (const r of e.cnt.imp.values()) if (ids.has(r.campaignId) && inOutlet(r.screenId)) rows.push(r);
+  const basket = (cid) => e.campaign(cid)?.promo?.basket || 0;
+  const K = { plays: 0, imps: 0, scans: 0, red: 0, revenue: 0, spend: 0 };
+  for (const r of rows) { K.plays += r.plays; K.imps += r.impressions; K.scans += r.scans; K.red += r.redemptions; K.revenue += r.redemptions * basket(r.campaignId); K.spend += e.campaign(r.campaignId)?.advertiserId === advId ? r.spend : 0; }
+  for (const k of Object.keys(K)) K[k] = round(K[k], 2);
+  const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, imps: Math.round(sum(rows.filter((r) => r.hour === h), (r) => r.impressions)), red: round(sum(rows.filter((r) => r.hour === h), (r) => r.redemptions), 1) }));
+  const playing = [...e.screenState.entries()].filter(([sid, st]) => ids.has(st.now?.campaignId) && inOutlet(sid)).map(([id, st]) => ({ screenId: id, name: e.screens.get(id).name, campaignId: st.now.campaignId, n: st.now.n, since: st.now.since, outletId: outletForScreen(e, advId, id) }));
+  const red = e.liveRedemptions.filter((r) => ids.has(r.campaignId) && r.t >= e.dayStart && (!outlet || (r.screenId && inOutlet(r.screenId)))).slice(-15).reverse();
+  const byCamp = new Map(); for (const r of rows) { const x = byCamp.get(r.campaignId) || { plays: 0, imps: 0, scans: 0, red: 0, spend: 0, revenue: 0 }; x.plays += r.plays; x.imps += r.impressions; x.scans += r.scans; x.red += r.redemptions; x.spend += r.spend; x.revenue += r.redemptions * basket(r.campaignId); byCamp.set(r.campaignId, x); }
+  return { advertiser: e.advertisers.find((a) => a.id === advId), outlet, kpis: { ...K, conversion: K.scans ? round(K.red / K.scans, 3) : 0, ctr: K.imps ? round(K.scans / K.imps * 1000, 2) : 0, liveRed: red.length }, hourly, playing, recentRedemptions: red, outlets: e.outlets.filter((o) => o.advertiserId === advId),
+    campaigns: camps.map((c) => { const x = byCamp.get(c.id) || {}; return { id: c.id, name: c.name, status: c.status, kind: c.kind, plays: Math.round(x.plays || 0), imps: Math.round(x.imps || 0), scans: Math.round(x.scans || 0), red: Math.round(x.red || 0), spend: round(x.spend || 0), revenue: Math.round(x.revenue || 0) }; }) };
 }
 export function segmentPerformance(e, campaignId) {
   const c = e.campaign(campaignId); const k = e.cnt.camp.get(campaignId); if (!c || !k) return { campaignId, segments: [], suggestions: [] };
@@ -200,14 +223,29 @@ function hourlyScreenProfiles(e) {
   const key = Math.floor(e.t / HOUR) + ':' + e.flightArr.length;
   if (e._hsp?.key === key) return e._hsp;
   const prof = new Map(); const zoneProf = new Map();
+  // Hour-of-day pattern for the whole operating day: departed flights still count for the hours before they left.
+  const dayFlights = e.flightArr.map((f) => (f.status === 'DEP' ? { ...f, status: 'SCH' } : f));
   for (let h = 0; h < 24; h++) {
-    const t = e.dayStart + h * HOUR + 30 * MIN; const idx = presenceIndex(e.flightArr.map((f) => (t < e.t ? f : f)), t, e.queues); const cache = new Map();
-    for (const s of e.screens.values()) { const sig = s.catchKey || (s.catchKey = `${s.terminal}|${s.plazaWeight}|${s.landsideWeight}|${s.arrivalsWeight}|${(s.nearestGates || []).map((g) => g.gate + g.w).join(',')}`); let p = cache.get(sig); if (!p) { p = aggregate(screenContribs(idx, s), t); cache.set(sig, p); } if (!prof.has(s.id)) prof.set(s.id, []); prof.get(s.id)[h] = { n: p.n, shares: p.shares }; }
+    const t = e.dayStart + h * HOUR + 30 * MIN; const idx = presenceIndex(dayFlights, t, e.queues); const cache = new Map();
+    for (const s of e.screens.values()) { const sig = s.catchKey || (s.catchKey = `${s.terminal}|${s.plazaWeight}|${s.landsideWeight}|${s.arrivalsWeight}|${(s.nearestGates || []).map((g) => g.gate + g.w).join(',')}`); let p = cache.get(sig); if (!p) { p = aggregate(screenContribs(idx, s), t); cache.set(sig, p); } if (!prof.has(s.id)) prof.set(s.id, []); prof.get(s.id)[h] = { n: p.n, shares: p.shares, regions: p.regions, medianDwell: p.medianDwell, maxDelay: p.maxDelay, flights: p.flights }; }
     for (const z of e.layout.zones) { const p = aggregate(zoneContribs(idx, z, e.gatesByZone), t); if (!zoneProf.has(z.id)) zoneProf.set(z.id, []); zoneProf.get(z.id)[h] = { n: p.n, shares: p.shares }; }
   }
   e._hsp = { key, prof, zoneProf }; return e._hsp;
 }
-const CAPACITY = 8; // advertisers sharing a screen-hour rotation
+const CAPACITY = 6; // paid campaigns sharing a screen-hour rotation (15-second slots)
+/** Paid campaigns that would actually compete for this screen-hour: placed on the screen, approved, in schedule and
+ *  daypart, and passing their own audience filters against the predicted crowd. No crowd -> nothing booked. */
+function bookedAt(e, s, date, h, ph) {
+  if (!ph || ph.n <= 0) return 0; const t = date + h * HOUR + 30 * MIN; let n = 0;
+  for (const c of e.campaigns) {
+    if (c.status !== 'active' || c.approval?.state !== 'approved' || ['goodwill', 'airline', 'co-marketing'].includes(c.kind) || c.triggerOnly) continue;
+    if (!placementMatch(c, s) || t < Date.parse(c.schedule.start) || t > Date.parse(c.schedule.end)) continue;
+    if (c.schedule.hours && !(h >= c.schedule.hours[0] && h < c.schedule.hours[1])) continue;
+    if (hardFilterLite(c, { n: ph.n, shares: ph.shares, regions: ph.regions || {}, medianDwell: ph.medianDwell ?? 99, maxDelay: 999, flights: ph.flights || [] }, { ...(c.filters || {}), minDelay: undefined })) continue;
+    n++;
+  }
+  return Math.min(n, CAPACITY);
+}
 export function inventory(e, { zone, day = 0 } = {}) {
   const { prof } = hourlyScreenProfiles(e); const all = [...prof.values()].flatMap((a) => a.map((x) => x.n)).sort((a, b) => a - b);
   const p75 = all[Math.floor(all.length * 0.75)] || 1; const dowF = DOW_FACTOR[new Date(e.dayStart + day * DAY).getUTCDay()];
@@ -215,10 +253,10 @@ export function inventory(e, { zone, day = 0 } = {}) {
   const screens = [...e.screens.values()].filter((s) => !zone || s.zone === zone || (zone === 'premium' && ['ledwall', 'gate'].includes(s.kind) && s.terminal === 'T2'));
   const rows = screens.slice(0, 60).map((s) => ({ id: s.id, name: s.name, zone: s.zone, kind: s.kind, cells: Array.from({ length: 24 }, (_, h) => {
     const n = (prof.get(s.id)?.[h]?.n || 0) * dowF; const t = date + h * HOUR + 30 * MIN;
-    const booked = e.campaigns.filter((c) => c.status === 'active' && placementMatch(c, s) && t >= Date.parse(c.schedule.start) && t <= Date.parse(c.schedule.end) && (!c.schedule.hours || (h >= c.schedule.hours[0] && h < c.schedule.hours[1]))).length;
+    const booked = bookedAt(e, s, date, h, prof.get(s.id)?.[h]);
     const premium = n >= p75; const imps = n * s.visibility * 0.15 * 240;
     const price = imps / 1000 * s.baseCpm * (premium ? 1.35 : 1) * (1 + 0.08 * Math.min(booked, CAPACITY));
-    return { h, n: Math.round(n), booked: Math.min(booked, CAPACITY), state: booked >= CAPACITY ? 'sold' : premium ? 'premium' : booked ? 'partial' : 'available', price: Math.round(price) };
+    return { h, n: Math.round(n), booked, premium, state: booked >= CAPACITY ? 'sold' : premium ? 'premium' : booked ? 'partial' : 'available', price: Math.round(price) };
   }) }));
   return { date: new Date(date).toISOString().slice(0, 10), capacity: CAPACITY, rows, zones: e.layout.zones.map((z) => ({ id: z.id, name: z.name })) };
 }
@@ -228,7 +266,7 @@ export function yieldForecast(e) {
     const date = e.dayStart + d * DAY; const dowF = DOW_FACTOR[new Date(date).getUTCDay()]; let cap = 0, booked = 0, rev = 0, footfall = 0;
     for (const s of e.screens.values()) for (let h = 5; h < 24; h++) {
       const t = date + h * HOUR + 30 * MIN; const n = (prof.get(s.id)?.[h]?.n || 0) * dowF; footfall += n;
-      const b = Math.min(CAPACITY, e.campaigns.filter((c) => c.status === 'active' && placementMatch(c, s) && t >= Date.parse(c.schedule.start) && t <= Date.parse(c.schedule.end) && (!c.schedule.hours || (h >= c.schedule.hours[0] && h < c.schedule.hours[1]))).length);
+      const b = bookedAt(e, s, date, h, prof.get(s.id)?.[h]);
       cap += CAPACITY; booked += b; rev += n * s.visibility * 0.15 * 240 / 1000 * s.baseCpm * (b / CAPACITY) * 1.05;
     }
     days.push({ date: new Date(date).toISOString().slice(0, 10), occupancy: round(booked / cap, 3), revenueForecast: Math.round(rev), footfallIndex: round(dowF, 2) });

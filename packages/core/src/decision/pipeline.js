@@ -77,7 +77,7 @@ export function decide(env, s, profile) {
     if (reason) { if (reason !== 'Not booked on this screen') candidates.push({ campaignId: c.id, name: c.name, filtered: reason }); continue; }
     const { match, parts } = audienceMatch(c.weights, profile.shares, env.segmentModel);
     const { boost, fired } = evaluateTriggers(c, profile, env);
-    const perf = env.perfOf(c); const pacing = env.pacingOf(c);
+    const perf = env.perfOf(c, profile); const pacing = env.pacingOf(c);
     const row = { campaign: c, match, parts, boost, triggers: fired, perf, pacing };
     row.final = finalScore(row, rules);
     if (c.minMatch && match < c.minMatch) { candidates.push({ campaignId: c.id, name: c.name, match: round(match, 4), boost, perf: round(perf, 4), final: round(row.final, 4), filtered: `Below ${Math.round(c.minMatch * 100)}% match floor; served at better-fit gates` }); continue; }
@@ -133,7 +133,7 @@ export function decide(env, s, profile) {
   return {
     t: env.t, slot: env.slot, screenId: s.id, winnerId: winner?.campaign.id || null, winnerName: winner?.campaign.name || 'House ad: advertise here',
     final: winner ? round(winner.final, 4) : 0, rule: winner ? rule : 'No eligible campaign: house ad', candidates: cands,
-    profile: { n: profile.n, shares: Object.fromEntries(Object.entries(profile.shares).map(([k, v]) => [k, round(v, 3)])), medianDwell: profile.medianDwell, maxDelay: profile.maxDelay, topDest: profile.topDest, topNat: profile.topNat, topLang: profile.topLang, flights: profile.flights.slice(0, 6) },
+    profile: { n: profile.n, n30: profile.n30 ?? null, age: profile.age, cabin: profile.cabin, regions: profile.regions, topVia: profile.topVia, connecting: profile.connecting, hour: new Date(env.t).getUTCHours(), festival: env.festival || null, shares: Object.fromEntries(Object.entries(profile.shares).map(([k, v]) => [k, round(v, 3)])), medianDwell: profile.medianDwell, maxDelay: profile.maxDelay, topDest: profile.topDest, topNat: profile.topNat, topLang: profile.topLang, flights: profile.flights.slice(0, 6) },
     evidence, ai: { provider: proposal.provider, proposedId: proposal.ranking[0]?.campaignId || null, proposedScore: proposal.ranking[0]?.score ?? null, rationale: proposal.ranking[0]?.rationale || '', cites: proposal.ranking[0]?.cites || [], verified: verdict.ok, checks: verdict.checks, fallback, hallucinated: !!proposal.hallucinated },
     explain: winner ? `${winner.campaign.name} won at ${fmtHM(env.t)}: ${rule}.` : 'House ad',
   };

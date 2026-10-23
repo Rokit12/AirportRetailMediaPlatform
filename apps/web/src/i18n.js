@@ -15,7 +15,7 @@ const SW = {
   Overview: 'Muhtasari', 'Decision engine': 'Injini ya maamuzi', 'Master data': 'Data kuu', Incidents: 'Matukio', 'Data feeds': 'Mitiririko ya data',
   Dashboard: 'Dashibodi', Campaigns: 'Kampeni', Creatives: 'Matangazo', 'Promo codes': 'Misimbo ya ofa', History: 'Historia', Inventory: 'Nafasi za matangazo', Approvals: 'Idhini',
   Advertisers: 'Watangazaji', Matching: 'Ulinganisho', Packages: 'Vifurushi', 'My flights': 'Ndege zangu', 'Gate messaging': 'Ujumbe wa geti', 'Delay goodwill': 'Fidia ya kuchelewa',
-  Partners: 'Washirika', 'Screen simulator': 'Kiigaji cha skrini', 'Split screen': 'Skrini mbili', 'Static demo: the full engine runs in this page.': 'Onyesho tuli: injini yote inaendeshwa ndani ya ukurasa huu.',
+  Partners: 'Washirika', 'last 30 days + today': 'siku 30 zilizopita + leo', 'Zone': 'Kanda', 'Revenue currency (code)': 'Sarafu ya mapato (msimbo)', 'Currency symbol': 'Alama ya sarafu', 'Passenger presence by zone (current 5-minute window)': 'Uwepo wa abiria kwa kanda (kipindi cha sasa cha dakika 5)', 'From AODB/AIDX flights at nearby gates and ACRIS queue gauges': 'Kutoka ndege za AODB/AIDX kwenye geti za karibu na vipimo vya foleni vya ACRIS', 'Top nationalities': 'Mataifa makuu', 'Top destinations': 'Maeneo makuu', 'Security queue': 'Foleni ya ukaguzi', wait: 'kusubiri', 'Hide full crowd profile': 'Ficha wasifu kamili wa umati', 'Show full crowd profile': 'Onyesha wasifu kamili wa umati', 'Crowd size': 'Ukubwa wa umati', 'in 30 min': 'baada ya dak 30', 'Time context': 'Muktadha wa muda', 'Median dwell': 'Muda wa kati wa kusubiri', 'Max delay': 'Kuchelewa kwa juu', Destinations: 'Maeneo yanayoenda', 'Arriving from / connecting': 'Wanaotoka / wanaounganisha', 'Trip purpose': 'Madhumuni ya safari', 'Party type': 'Aina ya kikundi', 'Age band': 'Kundi la umri', Gender: 'Jinsia', female: 'wanawake', male: 'wanaume', Cabin: 'Daraja', 'Premium economy': 'Uchumi wa hadhi', Economy: 'Uchumi', Nationalities: 'Mataifa', Languages: 'Lugha', 'All outlets': 'Maduka yote', 'choose an outlet above': 'chagua duka hapo juu', 'today, screens near this outlet': 'leo, skrini karibu na duka hili', 'Trigger rule': 'Kanuni ya kichocheo', When: 'Lini', 'A nearby flight is delayed': 'Ndege ya karibu imechelewa', 'A nearby flight changes gate': 'Ndege ya karibu imebadilisha geti', 'Boarding starts at a nearby gate': 'Upandaji umeanza kwenye geti la karibu', 'It is a festival day': 'Ni siku ya sikukuu', 'Specific screens (optional)': 'Skrini maalum (si lazima)', 'Specific gates (codes, e.g. 40,41,42)': 'Geti maalum (misimbo, mf. 40,41,42)', 'Destinations (airports)': 'Maeneo yanayoenda (viwanja vya ndege)', 'Only when a nearby flight is delayed at least (min, optional)': 'Tu ndege ya karibu ikichelewa angalau (dak, si lazima)', 'Uploaded image': 'Picha iliyopakiwa', 'Image file (PNG, JPEG, WebP or GIF, up to 2 MB)': 'Faili la picha (PNG, JPEG, WebP au GIF, hadi MB 2)', 'Image larger than 2 MB': 'Picha ni kubwa kuliko MB 2', 'Advertiser report': 'Ripoti ya mtangazaji', 'Incidents & feeds': 'Matukio na mitiririko', 'Campaigns & history': 'Kampeni na historia', 'Creatives & promo codes': 'Matangazo na misimbo ya ofa', 'Inventory & yield': 'Nafasi na mavuno', 'Advertisers & reports': 'Watangazaji na ripoti', 'Screen simulator': 'Kiigaji cha skrini', 'Split screen': 'Skrini mbili', 'Static demo: the full engine runs in this page.': 'Onyesho tuli: injini yote inaendeshwa ndani ya ukurasa huu.',
   'Connected to the API.': 'Imeunganishwa na API.', 'Data: fictional airport, airlines and brands. No passenger-level data.': 'Data: uwanja wa ndege, mashirika na chapa za kubuni. Hakuna data ya abiria mmoja mmoja.',
   'Connecting to the simulation…': 'Inaunganisha na uigaji…', Company: 'Kampuni', Language: 'Lugha', Role: 'Jukumu',
 
@@ -176,6 +176,15 @@ const SW = {
 // Engine-generated sentences. Order matters: longer, more specific patterns first. `$n` keeps data values.
 const D = (s) => s.replace(/delayed (\d+) min/g, 'imechelewa dak $1').replace(/ boarding\b/g, ' inapanda').replace(/gate change/g, 'badiliko la geti');
 const PATTERNS_SW = [
+  [/^(\d+) min$/, (m) => `dak ${m[1]}`],
+  [/^Security queue: (\d+) min wait$/, (m) => `Foleni ya ukaguzi: dak ${m[1]} kusubiri`],
+  [/^(\S+) · gate (\S+)$/, (m) => `${m[1]} · geti ${m[2]}`],
+  [/^Generated ([\d-]+ [\d:]+)$/, (m) => `Imetolewa ${m[1]}`],
+  [/^If a flight( to (\S+))? is delayed more than (\d+) min(, at gates (.+))?, multiply this campaign’s match by ([\d.]+)\.$/, (m) => `Ndege${m[2] ? ` kwenda ${m[2]}` : ''} ikichelewa zaidi ya dak ${m[3]}${m[5] ? `, kwenye geti ${m[5]}` : ''}, zidisha ulinganifu wa kampeni hii kwa ${m[6]}.`],
+  [/^If a nearby flight changes gate \(within 30 min\), multiply this campaign’s match by ([\d.]+)\.$/, (m) => `Ndege ya karibu ikibadilisha geti (ndani ya dak 30), zidisha ulinganifu wa kampeni hii kwa ${m[1]}.`],
+  [/^While a nearby flight is boarding, multiply this campaign’s match by ([\d.]+)\.$/, (m) => `Ndege ya karibu ikiwa inapanda, zidisha ulinganifu wa kampeni hii kwa ${m[1]}.`],
+  [/^On festival days in the event calendar, multiply this campaign’s match by ([\d.]+)\.$/, (m) => `Siku za sikukuu kwenye kalenda, zidisha ulinganifu wa kampeni hii kwa ${m[1]}.`],
+  [/^(\d+) from real phones today$/, (m) => `${m[1]} kutoka simu halisi leo`],
   [/^(\S+) (SCH|DLY|BRD|GCL|DEP|ARR|CNL)( \+\d+m)? gate (\S+)$/, (m) => `${m[1]} ${m[2]}${m[3] || ''} geti ${m[4]}`],
   [/^(\S+) wait (\d+) min, (\d+) in queue$/, (m) => `${m[1]} kusubiri dak ${m[2]}, ${m[3]} kwenye foleni`],
 
@@ -296,9 +305,10 @@ function doText(node) {
   if (OUT.get(node) === cur) return;                // our own output
   EN.set(node, cur);                                 // React wrote fresh English
   if (lang === 'en') return;
-  const m = /^([\s·,.:;()–\-]*)([\s\S]*?)([\s·,.:;()–\-]*)$/.exec(cur); const core = m[2]; if (!core) return;
-  const out = tr(core);
-  if (out !== core) { const v = m[1] + out + m[3]; OUT.set(node, v); node.nodeValue = v; }
+  // exact text first; then retry without leading/trailing separators (" · ", ", ") that React splits around values
+  const lead = cur.match(/^\s*/)[0], trail = cur.match(/\s*$/)[0]; let core = cur.trim(); let out = tr(core); let pre = lead, post = trail;
+  if (out === core) { const m = /^([\s·,:;–-]*)([\s\S]*?)([\s·,:;–-]*)$/.exec(cur); if (m[2] && m[2] !== core) { const o2 = tr(m[2]); if (o2 !== m[2]) { core = m[2]; out = o2; pre = m[1]; post = m[3]; } } }
+  if (out !== core) { const v = pre + out + post; OUT.set(node, v); node.nodeValue = v; }
 }
 function doAttrs(el) {
   if (skip(el)) return;

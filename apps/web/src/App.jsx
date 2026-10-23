@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api, MODE } from './api.js';
-import { Ctx, t } from './components/ui.jsx';
+import { Ctx, t, Tabs, useApp } from './components/ui.jsx';
 import { SimBar } from './components/shared.jsx';
 import { setLang as setI18n } from './i18n.js';
 import { THEME } from './theme.config.js';
@@ -11,10 +11,21 @@ import { MediaInventory, MediaApprovals, MediaAdvertisers, MediaReport, MediaMat
 import { AirlineFlights, AirlineMessaging, AirlineGoodwill, AirlinePartners } from './pages/airline.jsx';
 import { PassengerScreen } from './pages/passenger.jsx';
 
+// Each role: one main dashboard (first entry) and up to three sub-pages. Related views share a sub-page as tabs;
+// entries without a label are reachable from those tabs and deep links but not listed in the sidebar.
+const group = (tabs) => function Grouped() {
+  const { page, nav } = useApp(); const cur = tabs.find((x) => x[0] === page) || tabs[0]; const C = cur[2];
+  return <><Tabs value={cur[0]} onChange={(v) => nav(v)} options={tabs.map(([k, l]) => [k, t(l)])} /><C /></>;
+};
+const ADMIN_OPS = group([['incidents', 'Incidents', AdminIncidents], ['feeds', 'Data feeds', AdminFeeds]]);
+const RETAIL_CAMPAIGNS = group([['campaigns', 'Campaigns', RetailerCampaigns], ['history', 'History', RetailerHistory]]);
+const RETAIL_CREATIVE = group([['creatives', 'Creatives', RetailerCreatives], ['promos', 'Promo codes', RetailerPromos]]);
+const MEDIA_INVENTORY = group([['inventory', 'Inventory', MediaInventory], ['packages', 'Packages', MediaPackages]]);
+const MEDIA_ADV = group([['advertisers', 'Advertisers', MediaAdvertisers], ['report', 'Advertiser report', MediaReport]]);
 const ROLES = {
-  admin: { label: 'Platform Admin', glyph: 'A', theme: 'control', pages: [['overview', 'Overview', AdminOverview], ['decisions', 'Decision engine', AdminDecisions], ['master', 'Master data', AdminMaster], ['incidents', 'Incidents', AdminIncidents], ['feeds', 'Data feeds', AdminFeeds]] },
-  retailer: { label: 'Retailer', glyph: 'R', pages: [['dashboard', 'Dashboard', RetailerDashboard], ['campaigns', 'Campaigns', RetailerCampaigns], ['creatives', 'Creatives', RetailerCreatives], ['promos', 'Promo codes', RetailerPromos], ['history', 'History', RetailerHistory]], companies: (c) => c.advertisers.filter((a) => a.persona && a.type !== 'airline').map((a) => [a.id, `${a.name} · ${a.label}`]) },
-  media: { label: 'Media Manager', glyph: 'M', pages: [['inventory', 'Inventory', MediaInventory], ['approvals', 'Approvals', MediaApprovals], ['advertisers', 'Advertisers', MediaAdvertisers], ['matching', 'Matching', MediaMatching], ['packages', 'Packages', MediaPackages], ['report', null, MediaReport]] },
+  admin: { label: 'Platform Admin', glyph: 'A', theme: 'control', pages: [['overview', 'Overview', AdminOverview], ['decisions', 'Decision engine', AdminDecisions], ['master', 'Master data', AdminMaster], ['incidents', 'Incidents & feeds', ADMIN_OPS, 'ops'], ['feeds', null, ADMIN_OPS, 'ops']] },
+  retailer: { label: 'Retailer', glyph: 'R', pages: [['dashboard', 'Dashboard', RetailerDashboard], ['campaigns', 'Campaigns & history', RETAIL_CAMPAIGNS, 'camp'], ['history', null, RETAIL_CAMPAIGNS, 'camp'], ['creatives', 'Creatives & promo codes', RETAIL_CREATIVE, 'cre'], ['promos', null, RETAIL_CREATIVE, 'cre']], companies: (c) => c.advertisers.filter((a) => a.persona && a.type !== 'airline').map((a) => [a.id, `${a.name} · ${a.label}`]) },
+  media: { label: 'Media Manager', glyph: 'M', pages: [['inventory', 'Inventory & yield', MEDIA_INVENTORY, 'inv'], ['packages', null, MEDIA_INVENTORY, 'inv'], ['approvals', 'Approvals', MediaApprovals], ['advertisers', 'Advertisers & reports', MEDIA_ADV, 'adv'], ['report', null, MEDIA_ADV, 'adv'], ['matching', 'Matching', MediaMatching]] },
   airline: { label: 'Airline Rep', glyph: 'L', pages: [['flights', 'My flights', AirlineFlights], ['messaging', 'Gate messaging', AirlineMessaging], ['goodwill', 'Delay goodwill', AirlineGoodwill], ['partners', 'Partners', AirlinePartners]], companies: (c) => c.airlines.filter((a) => ['XD', 'XH', 'XY'].includes(a.iata)).map((a) => [a.iata, `${a.name} · ${a.model === 'LCC' ? 'Low-cost' : 'Full-service'}`]) },
   passenger: { label: 'Passenger', glyph: 'P', pages: [['screen', 'Screen simulator', PassengerScreen]] },
 };
@@ -60,7 +71,7 @@ export default function App({ config: cfgInit }) {
       <SimBar />
       <div className={`body ${split ? 'split' : ''}`}>
         {split ? <div className="side" style={{ padding: 12, background: 'var(--bg)' }}><PassengerScreen embedded /></div>
-          : <aside className="side"><h4>{t(R.label)}</h4>{R.pages.filter((p) => p[1]).map(([k, l]) => <button key={k} aria-current={page === k ? 'page' : undefined} onClick={() => { setPage(k); setParams({}); }}>{t(l)}</button>)}
+          : <aside className="side"><h4>{t(R.label)}</h4>{R.pages.filter((p) => p[1]).map(([k, l, , g]) => { const cur = (R.pages.find((p) => p[0] === page) || R.pages[0]); const on = page === k || (g && cur[3] === g); return <button key={k} aria-current={on ? 'page' : undefined} onClick={() => { setPage(k); setParams({}); }}>{t(l)}</button>; })}
             <div className="company muted">{MODE === 'static' ? t('Static demo: the full engine runs in this page.') : t('Connected to the API.')}<br />{t('Data: fictional airport, airlines and brands. No passenger-level data.')}</div></aside>}
         <main className="main" key={`${role}-${company}`}>{role === 'passenger' && split ? <AdminOverviewFallback /> : <Page />}</main>
       </div>

@@ -28,6 +28,7 @@ export function AdminOverview() {
           {inc && !inc.some((i) => i.status !== 'resolved') && <tr><td className="empty">No open incidents</td></tr>}</tbody></table></div>
       </Panel>
     </div>
+    <ZonePresencePanel zones={pres?.zones} />
     <div className="grid g3" style={{ marginTop: 14 }}>
       <Panel title="Revenue by hour">{k && <><Bars data={k.hourly} value={(d) => d.revenue} label={(d) => `${d.hour}:00`} hi={(d) => d.hour === new Date(live.t).getUTCHours()} fmt={(v) => money(v, config)} /><BarAxis data={k.hourly} label={(d) => d.hour} /></>}</Panel>
       <Panel title="Data feed health" right={<button className="btn sm" onClick={() => nav('feeds')}>Inspect</button>}>{feeds && <table className="tbl"><thead><tr><th>Feed</th><th>Adapter</th><th className="r">msg/min</th><th className="r">Last</th><th /></tr></thead><tbody>{feeds.feeds.map((f) => <tr key={f.source}><td><b>{f.source}</b></td><td className="small">{f.adapter}</td><td className="r num">{f.perMin}</td><td className="r num">{f.source === 'AODB' ? 'snapshot' : `${f.ageSec}s`}</td><td><Badge kind={statusKind(f.status)}>{f.status}</Badge></td></tr>)}</tbody></table>}</Panel>
@@ -42,11 +43,19 @@ export function AdminOverview() {
   </>;
 }
 
+function ZonePresencePanel({ zones }) {
+  const rows = (zones || []).filter((z) => z.n > 0).sort((a, b) => b.n - a.n);
+  return <Panel title="Passenger presence by zone (current 5-minute window)" right={<span className="small muted">{t('From AODB/AIDX flights at nearby gates and ACRIS queue gauges')}</span>} style={{ marginTop: 14 }} flush>
+    <div className="scroll" style={{ maxHeight: 300 }}><table className="tbl"><thead><tr><th>{t('Zone')}</th><th className="r">Pax</th><th className="r">{t('International')}</th><th>{t('Top nationalities')}</th><th>{t('Top destinations')}</th><th className="r">{t('Median dwell')}</th><th>{t('Source')}</th></tr></thead><tbody>
+      {rows.map((z) => <tr key={z.zone}><td>{z.name}</td><td className="r num">{int(z.n)}</td><td className="r num">{z.queue ? '—' : pct(z.intl)}</td><td className="small">{z.queue ? `Security queue: ${z.queue.waitMin} min wait` : z.topNat.map(([k, v]) => `${k} ${pct(v)}`).join(', ')}</td><td className="small">{z.topDest.map(([k]) => k).join(', ')}</td><td className="r num">{z.queue ? '—' : `${z.medianDwell} min`}</td><td className="small">{z.sources.join(' + ')}</td></tr>)}
+    </tbody></table></div></Panel>;
+}
+
 export function AdminDecisions() {
-  const { config, toast } = useApp(); const [rules, reload] = useApi('/api/rules', { live: false }); const [q, setQ] = useState(''); const [outcome, setOutcome] = useState(''); const [screen, setScreen] = useState('');
+  const { config, toast, reloadConfig } = useApp(); const [rules, reload] = useApi('/api/rules', { live: false }); const [q, setQ] = useState(''); const [outcome, setOutcome] = useState(''); const [screen, setScreen] = useState('');
   const [log] = useApi(`/api/decisions?limit=150&q=${encodeURIComponent(q)}&outcome=${outcome}&screen=${screen}`, { minMs: 2000 }); const [open, setOpen] = useState(null);
   const [form, setForm] = useState(null); const f = form || rules;
-  const save = async () => { await api.put('/api/rules', form); toast('Rule engine updated; all screens re-planned'); setForm(null); reload(); };
+  const save = async () => { await api.put('/api/rules', form); toast('Rule engine updated; all screens re-planned'); setForm(null); reload(); reloadConfig(); };
   const set = (k, v) => setForm({ ...(form || rules), [k]: v });
   return <>
     <PageHead title={t('Decision engine')}><span className="small muted">Segment model: {config.segmentModel}</span></PageHead>
@@ -59,6 +68,7 @@ export function AdminDecisions() {
           <Field label="Default frequency cap (plays / screen / hour)"><input type="number" value={f.defaultFreqCapPerHour} onChange={(e) => set('defaultFreqCapPerHour', e.target.value)} /></Field>
           <Field label="Max consecutive plays"><input type="number" min="1" max="10" value={f.maxConsecutive} onChange={(e) => set('maxConsecutive', e.target.value)} /></Field>
           <Field label="Airline boarding window (min before ETD)"><input type="number" value={f.boardingWindowMin} onChange={(e) => set('boardingWindowMin', e.target.value)} /></Field></div>
+        <div className="grid g2"><Field label="Revenue currency (code)"><input value={f.currency ?? config.settings.currency} onChange={(e) => set('currency', e.target.value.toUpperCase().slice(0, 3))} /></Field><Field label="Currency symbol"><input value={f.currencySymbol ?? config.settings.currencySymbol} onChange={(e) => set('currencySymbol', e.target.value.slice(0, 4))} /></Field></div>
         <label className="row small"><input type="checkbox" checked={f.competitorSeparation} onChange={(e) => set('competitorSeparation', e.target.checked)} /> Competitor separation (no two brands of the same category back to back)</label>
         <label className="row small"><input type="checkbox" checked={f.airlinePriority} onChange={(e) => set('airlinePriority', e.target.checked)} /> Airline priority in its own boarding window</label>
         <div className="small muted">Freshness limits: {Object.entries(f.freshness || {}).map(([k, v]) => `${k} ${v >= 3600 ? v / 3600 + 'h' : v + 's'}`).join(' · ')} · score tolerance {f.scoreTolerance}</div>

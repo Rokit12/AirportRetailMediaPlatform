@@ -59,7 +59,7 @@ export function zoneContribs(idx, zone, gatesByZone) {
 /** Roll flight profiles up into one crowd profile (aggregated shares only). */
 export function aggregate(contribs, t) {
   let N = 0; const acc = { purpose: {}, party: {}, age: {}, female: 0, male: 0, J: 0, W: 0, ff: 0, intl: 0, domestic: 0 };
-  const dest = {}, nat = {}, lang = {}, region = {}, flights = new Map(); const dw = [];
+  const dest = {}, nat = {}, lang = {}, region = {}, via = {}, flights = new Map(); const dw = []; let conn = 0;
   let maxDelay = 0;
   for (const { f, n, w, dwell } of contribs) {
     const x = n * w; if (x <= 0) continue; N += x; const p = f.profile;
@@ -70,6 +70,7 @@ export function aggregate(contribs, t) {
     if (f.nature === 'I') acc.intl += x; else acc.domestic += x;
     const d = f.direction === 'D' ? f.destination : f.origin; dest[d] = (dest[d] || 0) + x;
     const rg = AIRPORTS[d]?.region || 'Domestic'; region[rg] = (region[rg] || 0) + x;
+    const src = f.direction === 'A' ? f.origin : f.via; if (src) { via[src] = (via[src] || 0) + x; if (f.via || f.direction === 'A') conn += f.via ? x : 0; }
     for (const [k, v] of p.nationalities) nat[k] = (nat[k] || 0) + x * v;
     for (const [k, v] of p.languages) lang[k] = (lang[k] || 0) + x * v;
     dw.push([dwell ?? 0, x]); maxDelay = Math.max(maxDelay, f.delayMin || 0);
@@ -84,7 +85,8 @@ export function aggregate(contribs, t) {
     kids: age.u12, teens: age.a12_17, young: age.a18_24, adults: age.a25_34 + age.a35_44 + age.a45_54, seniors: age.a55p,
     female: sh(acc.female), male: sh(acc.male), premium: sh(acc.J + acc.W), ff: sh(acc.ff), intl: sh(acc.intl), domestic: sh(acc.domestic),
   };
-  return { t, n: Math.round(N), shares, age, topDest: top(dest), regions: Object.fromEntries(Object.entries(region).map(([k, v]) => [k, sh(v)])), topNat: top(nat), topLang: top(lang),
+  const cabin = { J: sh(acc.J), W: sh(acc.W) }; cabin.Y = Math.max(0, 1 - cabin.J - cabin.W);
+  return { t, n: Math.round(N), shares, age, cabin, topVia: top(via), connecting: sh(conn), topDest: top(dest), regions: Object.fromEntries(Object.entries(region).map(([k, v]) => [k, sh(v)])), topNat: top(nat), topLang: top(lang),
     medianDwell: med, maxDelay, flights: [...flights.values()].sort((a, b) => b.n - a.n).map((f) => ({ ...f, n: Math.round(f.n) })) };
 }
 export const SEGMENT_KEYS = Object.keys(SEGMENTS);

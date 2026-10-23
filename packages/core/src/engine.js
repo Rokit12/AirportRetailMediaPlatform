@@ -64,7 +64,7 @@ export class Engine {
     this.flightArr = [...this.flights.values()];
     this.queues = {}; this.feedStats = { AODB: { adapter: this.adapters.aodb.name, count: this.flightArr.length, lastAt: this.dayStart - 2 * HOUR, perMin: [] }, AIDX: { adapter: this.adapters.flights.name, count: 0, lastAt: t, perMin: [] }, ACRIS: { adapter: this.adapters.acris.name, count: 0, lastAt: t, perMin: [] } };
     this.feedLog = []; this.lagUntil = 0;
-    for (const c of this.campaigns) { if (c.kind === 'goodwill' && c.bound) { c.status = 'standby'; c.bound = null; } c.learn = { imps: 0, red: 0 }; }
+    for (const c of this.campaigns) { if (c.kind === 'goodwill' && c.bound) { c.status = 'standby'; c.bound = null; } c.learn = { imps: 0, red: 0, seg: {} }; }
     this.campaigns = this.campaigns.filter((c) => !c.goodwillInstance);
     this.goodwillLog = [];
     // replay flight events up to t (scripted + injected)
@@ -207,7 +207,7 @@ export class Engine {
     this.injected.push({ at, raw, event });
     this.agent.hallucinate.clear(); this.pins.clear();
     this.rebuild(this.dayStart + (14 * 60 + 10) * MIN);
-    for (const id of ['CMP-PERF15', 'CMP-TOYS', 'CMP-LOUNGE']) { const c = this.campaign(id); if (c) c.learn = { imps: 0, red: 0 }; }
+    for (const id of ['CMP-PERF15', 'CMP-TOYS', 'CMP-LOUNGE']) { const c = this.campaign(id); if (c) c.learn = { imps: 0, red: 0, seg: {} }; }
     const st = this.screenState.get('T2-G42-01'); st.last = null; st.streak = { campaignId: null, n: 0 }; st.hourCounts = new Map();
     this.runSlot(this.t, false, [this.screens.get('T2-G42-01')], 'worked-example');
     this.playing = false;
@@ -238,7 +238,7 @@ export class Engine {
     const day = new Date(t).toISOString().slice(0, 10); const fest = calendarFor(day).find((e) => e.kind === 'festival');
     return {
       t, hour: new Date(t).getUTCHours(), slot: Math.floor(t / SLOT), rules: this.settings.rules, campaigns: this.campaigns, segmentModel: this.segmentModel, pins: this.pins, agent: this.agent, festival: fest?.name,
-      perfOf: (c) => this.perfOf(c), pacingOf: (c) => this.pacingOf(c, t), spentToday: (id) => this.cnt.camp.get(id)?.spend || 0, spentTotal: (id) => (this.cnt.camp.get(id)?.spend || 0) + this.histSpend(id),
+      perfOf: (c, profile) => this.perfOf(c, profile?.shares), pacingOf: (c) => this.pacingOf(c, t), spentToday: (id) => this.cnt.camp.get(id)?.spend || 0, spentTotal: (id) => (this.cnt.camp.get(id)?.spend || 0) + this.histSpend(id),
       history: (sid) => { const st = this.screenState.get(sid); const hk = Math.floor(t / HOUR); if (st.hourKey !== hk) { st.hourKey = hk; st.hourCounts = new Map(); } return { last: st.last, hourCounts: st.hourCounts, streak: st.streak }; },
       flightById: (id) => this.flights.get(id),
       creativeCheck: (c, s) => this.creativeCheck(c, s),
@@ -247,7 +247,10 @@ export class Engine {
     };
   }
   histSpend(id) { if (!this._hs) { this._hs = new Map(); for (const h of this.history) this._hs.set(h.campaignId, (this._hs.get(h.campaignId) || 0) + h.spend); } return this._hs.get(id) || 0; }
-  perfOf(c) { const L = c.learn || { imps: 0, red: 0 }; const k = L.imps / 1000; const obs = k ? clamp(L.red / k / 2.6, 0, 1) : c.perfPrior; return (c.perfPrior * 150 + obs * k) / (150 + k); }
+  /** Learned conversion index. Scans/redemptions are tracked per audience segment, so the estimate for a slot is the
+   *  segment rates weighted by the crowd in front of the screen (falls back to the overall rate for thin segments). */
+  perfOf(c, shares) { const L = c.learn || { imps: 0, red: 0, seg: {} }; const k = L.imps / 1000; let obs = k ? clamp(L.red / k / 2.6, 0, 1) : c.perfPrior;
+    if (k && shares && L.seg) { let num = 0, den = 0; for (const sg of TRACK_SEGS) { const sh = shares[sg] || 0; if (!sh) continue; const e = L.seg[sg]; const r = e && e.imps > 300 ? clamp(e.red / (e.imps / 1000) / 2.6, 0, 1) : obs; num += sh * r; den += sh; } if (den) obs = num / den; } return (c.perfPrior * 150 + obs * k) / (150 + k); }
   pacingOf(c, t) { const d = c.budget?.daily; if (!d) return 1; const spent = this.cnt.camp.get(c.id)?.spend || 0; const frac = (t - this.dayStart) / DAY; return spent / d > frac + this.settings.rules.pacingTolerance ? 0.85 : 1; }
   evidenceFor(profile, s, t) {
     const ev = [];
@@ -267,10 +270,12 @@ export class Engine {
     const t0 = performance.now(); this.rev = (this.rev || 0) + 1;
     const idx = presenceIndex(this.flightArr, t, this.queues); this._pi = idx; idx.rev = this.rev;
     const env = this.env(t); const list = only || [...this.screens.values()];
+    const idx30 = presenceIndex(this.flightArr, t + 30 * MIN, this.queues);
     for (const s of list) {
       const st = this.screenState.get(s.id);
       if (st.status === 'offline') { st.now = null; continue; }
       const profile = this.screenProfile(s, t, idx);
+      profile.n30 = Math.round(screenContribs(idx30, s).reduce((a, c) => a + c.n * c.w, 0));
       const d = decide(env, s, profile); d.id = `D-${env.slot}-${s.id}${reason !== 'slot' ? '-' + reason : ''}`; d.reason = reason;
       this.applyPlay(s, d, profile, 1, t);
       if (d.ai.hallucinated && !d.ai.verified) this.raiseIncident(`ai:${s.id}:${Math.floor(t / HOUR)}`, { severity: 'medium', title: `AI proposal rejected on ${s.id}: cited evidence not in trusted feeds`, area: 'Decision engine', owner: 'Data science' }, quiet);
@@ -299,11 +304,11 @@ export class Engine {
     k.hourly[hr].imps += imps; k.hourly[hr].red += red; k.hourly[hr].spend += spend;
     k.screens.set(s.id, (k.screens.get(s.id) || 0) + imps);
     const cr = st.now?.creativeId; if (cr) { const a = (k.ab[cr] ||= { imps: 0, red: 0 }); a.imps += imps; a.red += red * (cr.endsWith('-B') ? 1.18 : 1); }
-    c.learn = c.learn || { imps: 0, red: 0 }; c.learn.imps += imps; c.learn.red += red;
+    c.learn = c.learn || { imps: 0, red: 0, seg: {} }; c.learn.seg ||= {}; c.learn.imps += imps; c.learn.red += red;
     // segment attribution: redemptions follow a hidden true affinity, so learning can surface lifts
     const aff = trueAffinity(c);
     let z = 0; for (const sg of TRACK_SEGS) z += (profile.shares[sg] || 0) * (aff[sg] || 1);
-    for (const sg of TRACK_SEGS) { const sh = profile.shares[sg] || 0; const e = (k.seg[sg] ||= { imps: 0, red: 0 }); e.imps += imps * sh; e.red += z ? red * sh * (aff[sg] || 1) / z : 0; }
+    for (const sg of TRACK_SEGS) { const sh = profile.shares[sg] || 0; const sr = z ? red * sh * (aff[sg] || 1) / z : 0; const e = (k.seg[sg] ||= { imps: 0, red: 0 }); e.imps += imps * sh; e.red += sr; const l = (c.learn.seg[sg] ||= { imps: 0, red: 0 }); l.imps += imps * sh; l.red += sr; }
     this.addImpression(c.id, s.id, hr, { plays: mult, imps, scans, red, spend });
     const sc = (this.cnt.screen.get(s.id) || { plays: 0, imps: 0, revenue: 0 }); sc.plays += mult; sc.imps += imps; sc.revenue += spend; this.cnt.screen.set(s.id, sc);
     const H = this.cnt.hourly[hr]; H.imps += imps; H.plays += mult; H.revenue += spend; H.red += red;

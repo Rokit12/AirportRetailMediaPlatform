@@ -5,7 +5,7 @@ import { mockCreative, creativePrompt, mergeLlmCreative } from '../creative/gena
 import { llmPrompt, parseLlmRanking, verifyProposal } from '../decision/ai.js';
 import { audienceMatch } from '../decision/score.js';
 import { validateCreative } from '../creative/validate.js';
-import { AIRPORT, AIRLINES, SEGMENTS, CATEGORIES, REGIONS, SEGMENT_MODEL_VERSION, AGE_LABEL } from '../reference.js';
+import { AIRPORT, AIRPORTS, AIRLINES, SEGMENTS, CATEGORIES, REGIONS, SEGMENT_MODEL_VERSION, AGE_LABEL } from '../reference.js';
 import { MIN, iso } from '../util/time.js';
 
 const bad = (msg, status = 400) => Object.assign(new Error(msg), { status });
@@ -72,7 +72,7 @@ function saveCampaign(e, id, body) {
 export const routes = [
   ['GET', '/api/health', 'Liveness', 'System', (e) => ({ ok: true, t: e.t, adapters: { aodb: e.adapters.aodb.name, aidx: e.adapters.flights.name, acris: e.adapters.acris.name } })],
   ['GET', '/api/config', 'Bootstrap config: theme, airport, layout, reference lists', 'System', (e, { ctx }) => ({
-    airport: AIRPORT, layout: e.layout, airlines: e.airlines, advertisers: e.advertisers, settings: { currency: e.settings.currency, currencySymbol: e.settings.currencySymbol, publicBaseUrl: e.settings.publicBaseUrl }, rules: e.settings.rules,
+    airport: AIRPORT, airports: AIRPORTS, layout: e.layout, airlines: e.airlines, advertisers: e.advertisers, settings: { currency: e.settings.currency, currencySymbol: e.settings.currencySymbol, publicBaseUrl: e.settings.publicBaseUrl }, rules: e.settings.rules,
     segments: SEGMENTS, segmentModel: SEGMENT_MODEL_VERSION, categories: CATEGORIES, regions: REGIONS, ageLabels: AGE_LABEL, adapters: { aodb: e.adapters.aodb.name, aidx: e.adapters.flights.name, acris: e.adapters.acris.name }, ai: { provider: ctx?.aiProvider || 'mock', llm: !!ctx?.llm }, outlets: e.outlets, screens: Q.screenList(e) })],
   ['GET', '/api/live', 'Live snapshot (also streamed on /api/stream)', 'System', (e) => Q.live(e)],
   ['POST', '/api/sim/control', 'Play, pause, speed (1/10/60), jump to time (HH:MM)', 'Simulation', (e, { body }) => {
@@ -105,6 +105,7 @@ export const routes = [
   ['GET', '/api/screens', 'All screens with status and what is playing', 'Screens', (e) => Q.screenList(e)],
   ['GET', '/api/screens/:id/now', 'Player payload: creative, promo code, FIDS strip, decision', 'Screens', (e, { params }) => { const r = Q.screenNow(e, params.id); if (!r) throw bad('Not found', 404); return r; }],
   ['GET', '/api/presence/zones', 'Passenger presence per zone now', 'Presence', (e) => ({ zones: Q.zonePresenceNow(e), gates: Q.gatePresenceNow(e) })],
+  ['GET', '/api/presence/windows', 'ZonePresence records per zone per 5-minute window (now to +hours)', 'Presence', (e, { query }) => Q.zonePresenceWindows(e, { zone: query.zone, hours: Math.min(6, Number(query.hours || 2)) })],
   ['GET', '/api/presence/zones/:id/flow', 'Footfall forecast for the next 2 hours (5-min windows)', 'Presence', (e, { params, query }) => Q.zoneFlow(e, params.id, Number(query.minutes || 120))],
   ['GET', '/api/decisions', 'Searchable decision log', 'Decisions', (e, { query }) => Q.decisionLog(e, query)],
   ['GET', '/api/decisions/:id', 'Full decision with evidence trail', 'Decisions', (e, { params }) => { const d = Q.decisionById(e, params.id); if (!d) throw bad('Not found', 404); return d; }],
@@ -123,8 +124,8 @@ export const routes = [
   ['GET', '/api/incidents', 'Incidents and alerts', 'Admin', (e) => e.incidents.slice().reverse()],
   ['POST', '/api/incidents', 'Create a manual incident / bug', 'Admin', (e, { body }) => { need(body, ['title', 'severity']); const i = { id: `INC-${1000 + e.incidents.length + 1}`, key: 'manual:' + Date.now(), status: 'open', t: e.t, area: 'Manual', owner: 'Unassigned', manual: true, ...body }; e.incidents.push(i); e.incidentsManual.push(i); e.persist('incident', i); return i; }],
   ['PATCH', '/api/incidents/:id', 'Update owner / status / notes', 'Admin', (e, { params, body }) => { const i = e.incidents.find((x) => x.id === params.id); if (!i) throw bad('Not found', 404); for (const k of ['owner', 'status', 'note', 'severity']) if (body[k] != null) i[k] = body[k]; if (body.status === 'resolved') i.resolvedAt = e.t; e.persist('incident', i); return i; }],
-  ['GET', '/api/rules', 'Rule-engine settings', 'Admin', (e) => ({ ...e.settings.rules, segmentModel: SEGMENT_MODEL_VERSION, segments: SEGMENTS })],
-  ['PUT', '/api/rules', 'Update rule-engine settings', 'Admin', (e, { body }) => { const r = e.settings.rules; for (const k of ['wMatch', 'wPerf', 'explorationPct', 'maxConsecutive', 'defaultFreqCapPerHour', 'pacingTolerance', 'boardingWindowMin']) if (body[k] != null) r[k] = Number(body[k]); for (const k of ['competitorSeparation', 'airlinePriority']) if (body[k] != null) r[k] = !!body[k]; if (body.currency) { e.settings.currency = body.currency; e.settings.currencySymbol = body.currencySymbol || body.currency + ' '; } e.persist('settings', e.settings); e.runSlot(e.t); return r; }],
+  ['GET', '/api/rules', 'Rule-engine settings', 'Admin', (e) => ({ ...e.settings.rules, currency: e.settings.currency, currencySymbol: e.settings.currencySymbol, segmentModel: SEGMENT_MODEL_VERSION, segments: SEGMENTS })],
+  ['PUT', '/api/rules', 'Update rule-engine settings', 'Admin', (e, { body }) => { const r = e.settings.rules; for (const k of ['wMatch', 'wPerf', 'explorationPct', 'maxConsecutive', 'defaultFreqCapPerHour', 'pacingTolerance', 'boardingWindowMin']) if (body[k] != null) r[k] = Number(body[k]); for (const k of ['competitorSeparation', 'airlinePriority']) if (body[k] != null) r[k] = !!body[k]; if (body.currency) e.settings.currency = String(body.currency).toUpperCase().slice(0, 3); if (body.currencySymbol != null) e.settings.currencySymbol = String(body.currencySymbol).slice(0, 4); else if (body.currency && !body.currencySymbol) e.settings.currencySymbol = e.settings.currencySymbol || `${e.settings.currency} `; e.persist('settings', e.settings); e.runSlot(e.t); return r; }],
   ['GET', '/api/master/:type', 'Master data list (advertisers, outlets, airlines, zones, gates, screens)', 'Admin', (e, { params }) => { const m = MASTER[params.type]; if (!m) throw bad('Unknown type', 404); return m.get(e); }],
   ['POST', '/api/master/:type', 'Create master-data record', 'Admin', (e, { params, body }) => upsertMaster(e, params.type, null, body)],
   ['PUT', '/api/master/:type/:id', 'Update master-data record', 'Admin', (e, { params, body }) => upsertMaster(e, params.type, params.id, body)],
@@ -153,7 +154,7 @@ export const routes = [
   ['GET', '/api/claim/:code', 'Mobile claim page data', 'Promo', (e, { params }) => { const c = e.claimInfo(params.code); if (!c) throw bad('Code not found', 404); return c; }],
   ['POST', '/api/claim/:code/redeem', 'Redeem a code (records a redemption)', 'Promo', (e, { params, body }) => e.redeem(params.code, body || {})],
   ['POST', '/api/claim/:code/share', 'Create a second code for family', 'Promo', (e, { params }) => e.shareCode(params.code)],
-  ['GET', '/api/retailer/:adv/dashboard', 'Retailer live dashboard', 'Retailer', (e, { params }) => Q.retailerDashboard(e, params.adv)],
+  ['GET', '/api/retailer/:adv/dashboard', 'Retailer live dashboard', 'Retailer', (e, { params, query }) => Q.retailerDashboard(e, params.adv, query.outlet)],
   ['GET', '/api/retailer/:adv/history', 'Campaign history with ROI', 'Retailer', (e, { params }) => Q.campaignHistory(e, params.adv)],
   ['GET', '/api/media/inventory', 'Inventory calendar: screens x hours', 'Media', (e, { query }) => Q.inventory(e, { zone: query.zone, day: Number(query.day || 0) })],
   ['GET', '/api/media/yield', 'Yield, pricing, 7-day occupancy and revenue forecast', 'Media', (e) => Q.yieldForecast(e)],

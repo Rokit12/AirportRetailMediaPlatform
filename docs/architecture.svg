@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5C6770"/></marker>
+    <marker id="ary" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#C99400"/></marker>
+    <style>
+      .t{font-size:15px;fill:#182027}.s{font-size:12.5px;fill:#5C6770}.h{font-size:17px;font-weight:700;fill:#182027}
+      .lane{font-size:13px;font-weight:700;fill:#8A949B;letter-spacing:.06em}
+      .box{fill:#FFFFFF;stroke:#C4CAC4;stroke-width:1.5}.core{fill:#FFF8E1;stroke:#E3AE12;stroke-width:1.8}
+      .dark{fill:#14181D}.wt{fill:#FFFFFF;font-size:15px}.ws{fill:#B9C3C9;font-size:12.5px}
+      .ln{stroke:#5C6770;stroke-width:1.8;fill:none;marker-end:url(#ar)}.lny{stroke:#C99400;stroke-width:2.2;fill:none;marker-end:url(#ary)}
+      .chip{fill:#EEF0EC;stroke:#D9DDD8}
+    </style>
+  </defs>
+  <rect width="1600" height="1000" fill="#F6F7F4"/>
+  <!-- title -->
+  <rect x="40" y="32" width="36" height="36" rx="7" fill="#FFC425"/><path d="M48 60h20M58 40v20M51 47l7-7 7 7" stroke="#14181D" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="90" y="58" font-size="26" font-weight="700" fill="#182027">Gateline: airport retail media platform</text>
+  <text x="92" y="84" class="s">Architecture · Meridian International (MQI, fictional) · all airport data enters through adapters; the core only sees the canonical model</text>
+
+  <!-- lanes -->
+  <text x="40" y="132" class="lane">AIRPORT SOURCES (MOCKED IN REAL FORMATS)</text>
+  <text x="430" y="132" class="lane">ADAPTER LAYER</text>
+  <text x="790" y="132" class="lane">@gateline/core (ENGINE, NO DEPENDENCIES)</text>
+  <text x="1270" y="132" class="lane">CLIENTS</text>
+
+  <!-- sources -->
+  <g>
+    <rect class="box" x="40" y="150" width="330" height="96" rx="10"/><text x="58" y="180" class="h">AODB flight movements</text>
+    <text x="58" y="202" class="s">33-column CSV, one row per leg (sample file)</text><text x="58" y="222" class="s">schedule, A-CDM times, gate, stand, pax, delays</text>
+    <rect class="box" x="40" y="266" width="330" height="96" rx="10"/><text x="58" y="296" class="h">IATA AIDX feed</text>
+    <text x="58" y="318" class="s">IATA_AIDX_FlightLegNotifRQ XML stream</text><text x="58" y="338" class="s">status, delay and gate changes in real time</text>
+    <rect class="box" x="40" y="382" width="330" height="96" rx="10"/><text x="58" y="412" class="h">ACI ACRIS (FIWARE)</text>
+    <text x="58" y="434" class="s">NGSI-LD entities: terminals, concourses,</text><text x="58" y="454" class="s">checkpoints, zones, queues, queue measurements</text>
+    <rect class="box" x="40" y="498" width="330" height="96" rx="10" stroke-dasharray="5 4"/><text x="58" y="528" class="h">Optional LLM provider</text>
+    <text x="58" y="550" class="s">OpenAI-compatible or Anthropic; default is an</text><text x="58" y="570" class="s">offline mock (no API key needed)</text>
+  </g>
+
+  <!-- adapters -->
+  <g>
+    <rect class="box" x="430" y="150" width="330" height="96" rx="10"/><text x="448" y="180" class="h">FlightSnapshotSource</text>
+    <text x="448" y="202" class="s">AODB_SOURCE = mock-csv | vendor-api</text><text x="448" y="222" class="s">→ Flight, GateAssignment, AircraftType</text>
+    <rect class="box" x="430" y="266" width="330" height="96" rx="10"/><text x="448" y="296" class="h">FlightSource.stream()</text>
+    <text x="448" y="318" class="s">FLIGHT_SOURCE = mock-aidx | vendor-api</text><text x="448" y="338" class="s">→ FlightEvent (AsyncIterable)</text>
+    <rect class="box" x="430" y="382" width="330" height="96" rx="10"/><text x="448" y="412" class="h">QueueSource</text>
+    <text x="448" y="434" class="s">ACRIS_SOURCE = mock-ngsi-ld | orion-ld</text><text x="448" y="454" class="s">→ Terminal, Zone, Checkpoint, QueueMeasurement</text>
+    <rect class="box" x="430" y="498" width="330" height="96" rx="10"/><text x="448" y="528" class="h">AI agent + creative assistant</text>
+    <text x="448" y="550" class="s">AI_PROVIDER = mock | openai | anthropic</text><text x="448" y="570" class="s">proposals are verified, never trusted</text>
+  </g>
+  <path class="ln" d="M370 198 H428"/><path class="ln" d="M370 314 H428"/><path class="ln" d="M370 430 H428"/><path class="ln" d="M370 546 H428"/>
+
+  <!-- core -->
+  <rect x="790" y="150" width="420" height="560" rx="14" fill="#FFFFFF" stroke="#C4CAC4" stroke-width="1.5"/>
+  <rect class="core" x="810" y="168" width="380" height="64" rx="9"/><text x="828" y="195" class="h">Canonical model</text><text x="828" y="217" class="s">source formats never pass this line</text>
+  <rect class="core" x="810" y="250" width="380" height="74" rx="9"/><text x="828" y="277" class="h">ZonePresence</text><text x="828" y="298" class="s">per zone × 5-min window: pax, nationalities,</text><text x="828" y="316" class="s">destinations, domestic/international, dwell</text>
+  <rect class="core" x="810" y="342" width="380" height="178" rx="9"/><text x="828" y="369" class="h">Decision pipeline · each screen, every 15 s</text>
+  <g font-size="13" fill="#182027">
+    <rect class="chip" x="828" y="384" width="104" height="28" rx="14"/><text x="880" y="403" text-anchor="middle">Profile</text>
+    <rect class="chip" x="940" y="384" width="104" height="28" rx="14"/><text x="992" y="403" text-anchor="middle">Filter</text>
+    <rect class="chip" x="1052" y="384" width="120" height="28" rx="14"/><text x="1112" y="403" text-anchor="middle">AI score</text>
+    <rect x="828" y="422" width="150" height="28" rx="14" fill="#14181D"/><text x="903" y="441" text-anchor="middle" fill="#FFC425" font-weight="700">Verify evidence</text>
+    <rect class="chip" x="986" y="422" width="186" height="28" rx="14"/><text x="1079" y="441" text-anchor="middle">Business rules</text>
+    <rect class="chip" x="828" y="460" width="160" height="28" rx="14"/><text x="908" y="479" text-anchor="middle">Choose + log</text>
+    <rect class="chip" x="996" y="460" width="176" height="28" rx="14"/><text x="1084" y="479" text-anchor="middle">Learn per segment</text>
+  </g>
+  <text x="828" y="508" class="s">rejected AI proposal → rule-based default</text>
+  <rect class="core" x="810" y="538" width="380" height="74" rx="9"/><text x="828" y="565" class="h">Read models + REST route table</text><text x="828" y="586" class="s">one table serves Fastify and the static demo build;</text><text x="828" y="604" class="s">OpenAPI generated from it (75 operations)</text>
+  <rect class="core" x="810" y="630" width="380" height="62" rx="9"/><text x="828" y="657" class="h">Simulation clock</text><text x="828" y="678" class="s">1x / 10x / 60x · jump · inject events</text>
+  <path class="ln" d="M760 198 C780 198 785 200 808 200"/><path class="ln" d="M760 314 C785 314 785 220 808 214"/><path class="ln" d="M760 430 C788 430 788 300 808 290"/><path class="ln" d="M760 546 C790 546 790 420 826 410"/>
+  <path class="ln" d="M1000 232 V248"/><path class="ln" d="M1000 324 V340"/><path class="ln" d="M1000 520 V536"/>
+
+  <!-- server -->
+  <rect class="dark" x="790" y="740" width="420" height="200" rx="14"/>
+  <text x="810" y="772" class="wt" font-weight="700" font-size="17">apps/server · Node 22 + Fastify</text>
+  <text x="810" y="800" class="ws">REST  /api/*   ·   live updates  /api/stream (SSE)</text>
+  <rect x="810" y="818" width="180" height="104" rx="9" fill="#222A31" stroke="#39444C"/><text x="826" y="846" class="wt" font-weight="700">SQLite</text><text x="826" y="868" class="ws">migrations + seed</text><text x="826" y="888" class="ws">campaigns, creatives,</text><text x="826" y="906" class="ws">impressions, redemptions</text>
+  <rect x="1004" y="818" width="186" height="104" rx="9" fill="#222A31" stroke="#39444C"/><text x="1020" y="846" class="wt" font-weight="700">Mock generator</text><text x="1020" y="868" class="ws">900 flights · 182 screens</text><text x="1020" y="888" class="ws">40 outlets · 26 campaigns</text><text x="1020" y="906" class="ws">30 days of history</text>
+  <path class="ln" d="M1000 710 V738"/>
+
+  <!-- clients -->
+  <rect class="box" x="1270" y="150" width="290" height="380" rx="12"/>
+  <text x="1290" y="180" class="h">apps/web · React + Vite</text><text x="1290" y="202" class="s">one design system, one live clock</text>
+  <g font-size="14" fill="#182027">
+    <rect x="1290" y="222" width="250" height="40" rx="8" fill="#14181D"/><text x="1306" y="247" fill="#FFFFFF">Platform Admin (control room)</text>
+    <rect x="1290" y="270" width="250" height="40" rx="8" class="chip"/><text x="1306" y="295">Retailer</text>
+    <rect x="1290" y="318" width="250" height="40" rx="8" class="chip"/><text x="1306" y="343">Media Manager</text>
+    <rect x="1290" y="366" width="250" height="40" rx="8" class="chip"/><text x="1306" y="391">Airline Representative</text>
+    <rect x="1290" y="414" width="250" height="40" rx="8" fill="#FFC425"/><text x="1306" y="439" font-weight="700">Passenger screen simulator</text>
+  </g>
+  <text x="1290" y="484" class="s">EN + Kiswahili · white-label theme config</text><text x="1290" y="504" class="s">split-screen demo mode</text>
+  <rect class="box" x="1270" y="560" width="290" height="110" rx="12"/>
+  <text x="1290" y="590" class="h">Mobile claim page</text><text x="1290" y="612" class="s">phone scans the QR on a screen,</text><text x="1290" y="632" class="s">redeems or shares a family code;</text><text x="1290" y="652" class="s">code expires at boarding close</text>
+  <path class="lny" d="M1212 820 C1240 820 1240 360 1268 360"/><text x="1222" y="600" class="s" transform="rotate(-90 1222 600)">REST + SSE</text>
+  <path class="lny" d="M1268 640 C1240 640 1236 870 1212 870"/>
+
+  <!-- deploy -->
+  <rect x="1270" y="700" width="290" height="240" rx="12" fill="#FFFFFF" stroke="#C4CAC4" stroke-dasharray="5 4"/>
+  <text x="1290" y="730" class="h">Run and deploy</text>
+  <text x="1290" y="756" class="t">docker compose up</text><text x="1290" y="776" class="s">web (nginx) + api containers, offline</text>
+  <text x="1290" y="806" class="t">Hosted playground</text><text x="1290" y="826" class="s">Render, from this repository (Docker)</text>
+  <text x="1290" y="856" class="t">npm run build:static</text><text x="1290" y="876" class="s">one HTML file, engine in the browser</text>
+  <text x="1290" y="906" class="t">Privacy</text><text x="1290" y="926" class="s">aggregated by flight, zone, time window only</text>
+
+  <!-- cause-effect callout -->
+  <rect x="40" y="640" width="690" height="300" rx="12" fill="#FFFFFF" stroke="#C4CAC4"/>
+  <text x="60" y="672" class="h">Cause and effect in under a second</text>
+  <g font-size="14" fill="#182027">
+    <circle cx="74" cy="704" r="13" fill="#FFC425"/><text x="74" y="709" text-anchor="middle" font-weight="700">1</text><text x="98" y="709">AIDX delay message for XY501 arrives through the adapter</text>
+    <circle cx="74" cy="744" r="13" fill="#FFC425"/><text x="74" y="749" text-anchor="middle" font-weight="700">2</text><text x="98" y="749">ZonePresence: 240 passengers stay 45 min longer near Gate 42</text>
+    <circle cx="74" cy="784" r="13" fill="#FFC425"/><text x="74" y="789" text-anchor="middle" font-weight="700">3</text><text x="98" y="789">Retailer delay rule fires (x1.5); Gate 42 screens re-planned at once</text>
+    <circle cx="74" cy="824" r="13" fill="#FFC425"/><text x="74" y="829" text-anchor="middle" font-weight="700">4</text><text x="98" y="829">Airline view shows the delay; goodwill voucher if past threshold</text>
+    <circle cx="74" cy="864" r="13" fill="#FFC425"/><text x="74" y="869" text-anchor="middle" font-weight="700">5</text><text x="98" y="869">Passenger scans the QR, redeems; revenue appears on the retailer dashboard</text>
+  </g>
+  <text x="60" y="904" class="s">Measured end to end in a browser: 0.76 s from the injected AIDX delay</text><text x="60" y="922" class="s">to the updated passenger screen and airline view (requirement: 2 s).</text>
+</svg>

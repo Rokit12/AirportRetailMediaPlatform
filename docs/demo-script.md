@@ -4,7 +4,7 @@ Open the playground. The simulation starts at **14:02** on Wed 14 Oct 2026 at Me
 
 **0:00–2:00 · The network (Platform Admin).**
 - Show the live map: 182 screens, the heat overlay of passenger presence, and the KPI strip ticking.
-- Open **Data feeds**: AODB snapshot, the AIDX message stream, ACRIS queue measurements, and the adapter in use for each.
+- Open **Incidents & feeds → Data feeds**: AODB snapshot, the AIDX message stream, ACRIS queue measurements, and the adapter in use for each.
 - Say: "Going live is one adapter and one config value."
 
 **2:00–5:00 · Cause and effect (Split screen).**
@@ -29,9 +29,9 @@ Open the playground. The simulation starts at **14:02** on Wed 14 Oct 2026 at Me
 3. **Inject event → AI fault**. The agent cites a fabricated "XY999". The verifier rejects it, the screen keeps the rule-based choice, and an incident is raised.
 
 **9:00–11:00 · Retailer self-serve.**
-1. **Campaigns → New campaign**: pick zones and weights, and watch the live sentence ("Matches 58% … expected 18,293 impressions").
+1. **Campaigns & history → New campaign**: pick zones and weights, and watch the live sentence ("Matches 58% … expected 18,293 impressions").
 2. Try **Best 3 slots tomorrow**, then submit.
-3. **Creatives**: type "Festive sweets, 20% off, families flying domestic" and get an EN/Kiswahili ad page.
+3. **Creatives & promo codes**: type "Festive sweets, 20% off, families flying domestic" and get an EN/Kiswahili ad page.
 4. Open a running campaign to show segment lift ("Families redeemed 3x") and **Apply** a suggested weight.
 
 **11:00–13:00 · Media Manager.**

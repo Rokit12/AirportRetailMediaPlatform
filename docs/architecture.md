@@ -1,5 +1,11 @@
 # Architecture
 
+![Gateline architecture](architecture.png)
+
+![Evidence-first decision pipeline](decision-pipeline.png)
+
+The same system as a Mermaid diagram (renders on GitHub):
+
 ```mermaid
 flowchart LR
   subgraph Sources["Airport sources (mocked, real formats)"]

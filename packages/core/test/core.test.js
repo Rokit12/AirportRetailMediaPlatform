@@ -66,3 +66,25 @@ test('Impression records aggregate per campaign x screen x hour; GateAssignment 
   e.injectGateChange('100902', '44'); const ga = queries.gateAssignments(e, { flight: 'XY501' })[0];
   assert.equal(ga.gate, '44'); assert.equal(ga.plannedGate, '42'); assert.equal(ga.changed, true);
 });
+
+test('crowd profiles are plausible: Monday 07:00 domestic skews business 25-44; Friday evening beach route skews families/couples', async () => {
+  const { flightProfile } = await import('../src/index.js');
+  const mon = flightProfile({ id: 'p1', direction: 'D', destination: 'DMQ', nature: 'D', sched: Date.parse('2026-10-12T07:00:00Z'), acType: 'A20N', pax: 170 }, 'FSC');
+  const fri = flightProfile({ id: 'p2', direction: 'D', destination: 'SMG', nature: 'I', sched: Date.parse('2026-10-16T18:30:00Z'), acType: 'A21N', pax: 200 }, 'LCC');
+  assert.ok(mon.purpose.business > 0.5, 'monday business'); assert.ok(mon.age.a25_34 + mon.age.a35_44 > 0.45, 'monday 25-44');
+  assert.ok(fri.party.family + fri.party.couple > 0.55, 'friday families+couples'); assert.ok(fri.purpose.holiday > 0.6);
+});
+test('ZonePresence: per zone per 5-min window with nationalities, destinations, split, dwell; ACRIS entities parse back', async () => {
+  const { queries, parseZone, parseCheckpoint, parseTerminal } = await import('../src/index.js');
+  const e = new Engine(buildData({ sampleCsv: sample })); await e.init();
+  const w = queries.zonePresenceWindows(e, { zone: 'T2-PLAZA', hours: 1 }); assert.equal(w.length, 13);
+  const r = w[0]; assert.ok(r.n > 0 && r.topNat.length && r.topDest.length && r.intl + r.domestic > 0.99 && r.medianDwell >= 0);
+  const sec = queries.zonePresenceNow(e).find((z) => z.kind === 'checkpoint'); assert.equal(sec.queue.source, 'ACRIS');
+  const ents = e.adapters.acris.entities(); for (const t of ['TerminalFacility', 'ConcourseFacility', 'CheckpointFacility', 'PassengerQueue', 'ZoneAreaLocation']) assert.ok(ents.some((x) => x.type === t), t);
+  assert.equal(parseZone(ents.find((x) => x.type === 'ZoneAreaLocation')).terminal, 'T1'); assert.equal(parseCheckpoint(ents.find((x) => x.type === 'CheckpointFacility')).type, 'Security Screening'); assert.equal(parseTerminal(ents[0]).airport, 'MQI');
+});
+test('learning is per segment: performance estimate depends on the crowd once data accumulates', async () => {
+  const e = new Engine(buildData({ sampleCsv: sample })); await e.init(Date.parse('2026-10-14T20:00:00Z'));
+  const c = e.campaign('CMP-TOYS'); const fam = e.perfOf(c, { family: 0.8, kids: 0.4 }); const biz = e.perfOf(c, { business: 0.8, solo: 0.6 });
+  assert.ok(fam > biz, `families ${fam} should convert better than business ${biz} for the toy store`);
+});

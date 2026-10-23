@@ -60,7 +60,7 @@ if (provider !== 'mock' && key && model) {
   } else console.warn(`[ai] unknown AI_PROVIDER "${provider}", using mock`);
 }
 
-const app = Fastify({ logger: false, bodyLimit: 2_000_000 });
+const app = Fastify({ logger: false, bodyLimit: 8_000_000 });
 await app.register(cors, { origin: true });
 app.addHook('onResponse', (req, reply, done) => { if (req.url.startsWith('/api/') && !req.url.startsWith('/api/stream')) { engine.metrics.api.push(reply.elapsedTime); if (engine.metrics.api.length > 2000) engine.metrics.api.splice(0, 500); } done(); });
 for (const [method, url, summary, tag, handler] of routes) {

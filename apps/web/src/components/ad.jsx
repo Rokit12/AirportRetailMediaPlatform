@@ -37,7 +37,15 @@ export function Qr({ text, size = 140, dark = THEME.colors.signalInk, light = '#
 /** Renders a creative template. Used for the passenger screen, previews and the creative library. */
 export function AdRender({ creative, lang = 'en', portrait = false, scale = 1, fluid = 0, footer, partner }) {
   if (!creative) return <div data-no-i18n style={{ background: 'var(--signal-ink)', color: 'var(--signal)', height: '100%', display: 'grid', placeItems: 'center', fontFamily: 'var(--cond)', fontSize: fluid ? `${28 * fluid}cqw` : 28 * scale, textAlign: 'center', padding: 20 }}>Your brand here · {THEME.operator}</div>;
-  const c = adCopy(creative, lang); const { bg, fg, accent } = creative.palette || {}; const split = creative.template === 'split'; const fl = creative.template === 'flight';
+  const c = adCopy(creative, lang); const { bg, fg, accent } = creative.palette || {};
+  if (creative.template === 'image') { const fsi = (n) => (fluid ? `${n * fluid}cqw` : `${n * scale}px`); return (
+    <div data-no-i18n style={{ position: 'relative', height: '100%', width: '100%', background: bg || '#000', overflow: 'hidden' }}>
+      <img src={creative.imageUrl} alt={c.headline} style={{ width: '100%', height: '100%', objectFit: portrait ? 'cover' : 'contain', display: 'block' }} />
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: fsi(14), padding: `${fsi(12)} ${fsi(20)}`, background: bg, color: fg, opacity: 0.94 }}>
+        <div style={{ fontFamily: 'var(--cond)', fontWeight: 700, fontSize: fsi(28), flex: 1, lineHeight: 1.05 }}>{c.headline}</div>
+        <span style={{ background: accent, color: bg, fontWeight: 700, padding: `${fsi(7)} ${fsi(14)}`, borderRadius: fsi(30), fontSize: fsi(16), whiteSpace: 'nowrap' }}>{c.cta}</span>{footer}
+      </div>
+    </div>); } const split = creative.template === 'split'; const fl = creative.template === 'flight';
   const fs = (n) => (fluid ? `${n * fluid}cqw` : `${n * scale}px`);
   return (
     <div data-no-i18n style={{ background: bg, color: fg, height: '100%', width: '100%', display: 'grid', gridTemplateColumns: portrait ? '1fr' : split ? '1fr 1fr' : '1.1fr 1fr', gridTemplateRows: portrait ? '1.1fr 1fr' : '1fr', overflow: 'hidden', position: 'relative' }}>

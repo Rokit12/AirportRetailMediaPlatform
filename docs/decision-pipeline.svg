@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 760" width="1600" height="760" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5C6770"/></marker>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D64545"/></marker>
+    <style>.h{font-size:18px;font-weight:700;fill:#182027}.s{font-size:13px;fill:#5C6770}.t{font-size:14px;fill:#182027}
+      .box{fill:#FFFFFF;stroke:#C4CAC4;stroke-width:1.5}.ln{stroke:#5C6770;stroke-width:2;fill:none;marker-end:url(#ar)}.lr{stroke:#D64545;stroke-width:2;fill:none;stroke-dasharray:6 4;marker-end:url(#arr)}
+      .num{font-size:15px;font-weight:700;fill:#14181D}</style>
+  </defs>
+  <rect width="1600" height="760" fill="#F6F7F4"/>
+  <text x="40" y="58" font-size="26" font-weight="700" fill="#182027">Evidence-first decision pipeline</text>
+  <text x="40" y="86" class="s">Runs for every screen in every 15-second slot. The AI may propose; only deterministic checks decide what reaches a screen.</text>
+
+  <!-- inputs -->
+  <rect class="box" x="40" y="120" width="250" height="250" rx="12"/>
+  <text x="60" y="152" class="h">Measured inputs</text>
+  <g class="t"><text x="60" y="184">AODB / AIDX flight events</text><text x="60" y="210">ACRIS queue gauges</text><text x="60" y="236">Screen heartbeats</text><text x="60" y="262">Scans and redemptions</text></g>
+  <text x="60" y="300" class="s">each with source, timestamp</text><text x="60" y="320" class="s">and freshness; cited by id</text>
+  <text x="60" y="348" class="s">e.g. AIDX:msg:MQI-AODB-000184533</text>
+
+  <!-- steps -->
+  <g>
+    <rect class="box" x="330" y="120" width="190" height="250" rx="12"/><circle cx="356" cy="148" r="15" fill="#FFC425"/><text x="356" y="153" text-anchor="middle" class="num">1</text><text x="380" y="154" class="h">Profile</text>
+    <text x="348" y="190" class="s">crowd for the screen's</text><text x="348" y="208" class="s">catchment: gates weighted</text><text x="348" y="226" class="s">by distance and time to</text><text x="348" y="244" class="s">boarding</text><text x="348" y="276" class="t">purpose · party · age</text><text x="348" y="296" class="t">cabin · nationality</text><text x="348" y="316" class="t">dwell · delay · size</text><text x="348" y="346" class="s">aggregated shares only</text>
+
+    <rect class="box" x="560" y="120" width="190" height="250" rx="12"/><circle cx="586" cy="148" r="15" fill="#FFC425"/><text x="586" y="153" text-anchor="middle" class="num">2</text><text x="610" y="154" class="h">Filter</text>
+    <text x="578" y="190" class="s">hard rules must pass:</text><g class="t"><text x="578" y="218">schedule, placement</text><text x="578" y="240">approval, brand safety</text><text x="578" y="262">domestic / international</text><text x="578" y="284">destination, dwell</text><text x="578" y="306">min crowd, budget</text><text x="578" y="328">creative validates</text></g>
+
+    <rect class="box" x="790" y="120" width="190" height="250" rx="12"/><circle cx="816" cy="148" r="15" fill="#FFC425"/><text x="816" y="153" text-anchor="middle" class="num">3</text><text x="840" y="154" class="h">AI score</text>
+    <text x="808" y="190" class="s">agent ranks candidates</text><text x="808" y="208" class="s">and cites evidence ids</text>
+    <rect x="808" y="228" width="156" height="100" rx="8" fill="#FFF8E1" stroke="#E3AE12"/><text x="818" y="252" class="t">0.75 × min(1,</text><text x="818" y="274" class="t">match × boost)</text><text x="818" y="296" class="t">+ 0.25 × learned</text><text x="818" y="318" class="t">× pacing</text>
+
+    <rect x="1020" y="120" width="210" height="250" rx="12" fill="#14181D"/><circle cx="1046" cy="148" r="15" fill="#FFC425"/><text x="1046" y="153" text-anchor="middle" class="num">4</text><text x="1070" y="154" font-size="18" font-weight="700" fill="#FFFFFF">Verify</text>
+    <g font-size="14" fill="#E9ECEE"><text x="1038" y="192">✓ cited inputs exist in</text><text x="1056" y="210">a trusted feed</text><text x="1038" y="238">✓ inputs are fresh</text><text x="1056" y="256">(AIDX ≤ 300 s …)</text><text x="1038" y="284">✓ hard rules pass</text><text x="1038" y="312">✓ score reproducible</text><text x="1056" y="330">from logged inputs</text></g>
+
+    <rect class="box" x="1270" y="120" width="290" height="250" rx="12"/><circle cx="1296" cy="148" r="15" fill="#FFC425"/><text x="1296" y="153" text-anchor="middle" class="num">5</text><text x="1320" y="154" class="h">Business rules</text>
+    <g class="t"><text x="1288" y="192">manual pin (with reason)</text><text x="1288" y="218">airline priority in its boarding window</text><text x="1288" y="244">competitor separation</text><text x="1288" y="270">frequency cap per screen</text><text x="1288" y="296">rotation and budget pacing</text><text x="1288" y="322">5% exploration (never on triggers)</text></g>
+  </g>
+  <path class="ln" d="M290 245 H328"/><path class="ln" d="M520 245 H558"/><path class="ln" d="M750 245 H788"/><path class="ln" d="M980 245 H1018"/><path class="ln" d="M1230 245 H1268"/>
+
+  <!-- reject path -->
+  <rect x="900" y="430" width="410" height="96" rx="12" fill="#FDECEC" stroke="#D64545"/>
+  <text x="920" y="462" font-size="17" font-weight="700" fill="#9B1C1C">Any check fails → AI choice rejected</text>
+  <text x="920" y="486" class="s">screen falls back to the rule-based default (deterministic</text><text x="920" y="504" class="s">score); an incident is raised. A hallucinated fact cannot play.</text>
+  <path class="lr" d="M1125 370 V428"/>
+  <path class="ln" d="M1310 478 H1380 V374"/><text x="1388" y="420" class="s">fallback ranking</text>
+
+  <!-- choose + learn -->
+  <rect class="box" x="40" y="430" width="560" height="140" rx="12"/><circle cx="66" cy="458" r="15" fill="#FFC425"/><text x="66" y="463" text-anchor="middle" class="num">6</text><text x="90" y="464" class="h">Choose and log</text>
+  <text x="58" y="496" class="t">highest score plays; the full record is stored: profile, candidates,</text><text x="58" y="518" class="t">scores, result reasons, AI checks and the evidence trail</text>
+  <text x="58" y="550" class="s">visible in every role: decision log, conflict view, "what played at my gates", "Why this ad?"</text>
+  <rect class="box" x="40" y="600" width="560" height="120" rx="12"/><circle cx="66" cy="628" r="15" fill="#FFC425"/><text x="66" y="633" text-anchor="middle" class="num">7</text><text x="90" y="634" class="h">Learn</text>
+  <text x="58" y="666" class="t">scans and redemptions per segment update each campaign's</text><text x="58" y="688" class="t">conversion estimate, weighted by the crowd at the next decision</text>
+  <path class="ln" d="M1500 372 V552 H602"/><text x="1080" y="546" class="s">winner</text><path class="ln" d="M320 572 V598"/>
+  <path class="ln" d="M40 660 H20 V245 H38"/><text x="14" y="470" class="s" transform="rotate(-90 14 470)">next slot</text>
+
+  <!-- worked example -->
+  <rect x="660" y="580" width="900" height="140" rx="12" fill="#FFFFFF" stroke="#E3AE12" stroke-width="1.6"/>
+  <text x="680" y="610" class="h">Worked example · Gate 42 at 14:10 (reproducible in the demo)</text>
+  <text x="680" y="634" class="s">crowd: XY501 to the Gulf hub, 240 pax, +45 min · ZQ88 to a beach, 180 pax · holiday 58%, family 31%, business 22%, intl 57%, dwell 52 min</text>
+  <g class="t"><text x="680" y="664">Duty-free fragrance 15% off</text><text x="960" y="664">match 71%</text><text x="1070" y="664">boost 1.5 (delay rule)</text><text x="1260" y="664" font-weight="700">0.86</text><text x="1330" y="664" font-weight="700" fill="#2E9E5B">plays</text>
+    <text x="680" y="688">Toy store, buy 2 get 1</text><text x="960" y="688">match 49%</text><text x="1070" y="688">boost 1.0</text><text x="1260" y="688">0.52</text><text x="1330" y="688">next in rotation</text>
+    <text x="680" y="712">Business lounge day pass</text><text x="960" y="712">match 18%</text><text x="1070" y="712">boost 1.0</text><text x="1260" y="712">0.21</text><text x="1330" y="712">other gates</text></g>
+</svg>

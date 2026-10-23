@@ -20,6 +20,18 @@ export function queueMeasurementEntity({ term, at, occupancy, waitSec, throughpu
     MeasurementDevice: P({ Name: `${term}-SEC-CAM-01`, MeasurementDeviceLocation: { Name: `${term} Security` } }), MeasurementTimePeriod: P({ StartTime: iso(at - 5 * MIN), EndTime: iso(at) }),
     PassengerQueue: P({ Identifier: `${term}-SEC-Q1`, Name: `${term} Security main queue`, QueueType: { Name: 'Economy' }, QueueStatus: { Name: 'Open' }, CheckpointFacility: { Identifier: `${term}-SEC`, Name: `${term} central security` } }), '@context': CTX };
 }
+export function zoneEntity(z) {
+  return { id: `urn:ngsi-ld:ZoneAreaLocation:${AIRPORT.iata}:${z.id}`, type: 'ZoneAreaLocation', Name: P(z.name), TerminalAreaLocation: P({ Name: z.terminal, AirportLocation: { Name: AIRPORT.name, Srid: 0 } }), '@context': CTX };
+}
+export function passengerQueueEntity(term) {
+  return { id: `urn:ngsi-ld:PassengerQueue:${AIRPORT.iata}:${term.id}-SEC-Q1`, type: 'PassengerQueue', Identifier: P(`${term.id}-SEC-Q1`), Name: P(`${term.id} Security main queue`),
+    QueueType: P({ Name: 'Economy' }), QueueStatus: P({ Name: 'Open' }), QueueLocation: P({ Name: `${term.id} Security` }),
+    CheckpointFacility: P({ Identifier: `${term.id}-SEC`, Name: `${term.name} central security`, ConcourseFacility: { Identifier: `${term.id}-SEC`, TerminalFacility: { Identifier: term.id, Name: term.name, AirportFacility: airportFacility } } }), '@context': CTX };
+}
+/** NGSI-LD entities -> canonical Terminal / Zone / Checkpoint */
+export const parseTerminal = (e) => ({ id: e.Identifier?.value, name: e.Name?.value, airport: e.AirportFacility?.value?.IataCode });
+export const parseZone = (e) => ({ id: e.id.split(':').pop(), name: e.Name?.value, terminal: e.TerminalAreaLocation?.value?.Name });
+export const parseCheckpoint = (e) => ({ id: e.Identifier?.value, name: e.Name?.value, type: e.CheckpointFacilityType?.value?.Description, terminal: e.ConcourseFacility?.value?.TerminalFacility?.Identifier, opening: e.OperationTimePeriod?.value?.OpeningTime, closing: e.OperationTimePeriod?.value?.ClosingTime });
 /** NGSI-LD QueueMeasurement -> canonical QueueMeasurement */
 export function parseQueueMeasurement(e) {
   const v = (k) => e[k]?.value; const q = v('PassengerQueue') || {};
@@ -35,7 +47,7 @@ export class MockAcrisFeed {
   constructor(layout, demandFn) { this.name = 'mock-ngsi-ld'; this.layout = layout; this.demand = demandFn; this.lastAt = 0; this.seq = 0; this.offline = new Set(); }
   entities() {
     const ts = this.layout.terminals;
-    return [...ts.map(terminalEntity), ...ts.map(checkpointEntity), ...this.layout.zones.map((z) => concourseEntity(z, ts.find((t) => t.id === z.terminal)))];
+    return [...ts.map(terminalEntity), ...ts.map(checkpointEntity), ...ts.map(passengerQueueEntity), ...this.layout.zones.map((z) => concourseEntity(z, ts.find((t) => t.id === z.terminal))), ...this.layout.zones.map(zoneEntity)];
   }
   measure(at) {
     return this.layout.terminals.map((t) => {

@@ -541,6 +541,34 @@
         }
       }
     },
+    "/api/presence/windows": {
+      "get": {
+        "summary": "ZonePresence records per zone per 5-minute window (now to +hours)",
+        "tags": [
+          "Presence"
+        ],
+        "operationId": "getApiPresenceWindows",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/presence/zones/{id}/flow": {
       "get": {
         "summary": "Footfall forecast for the next 2 hours (5-min windows)",

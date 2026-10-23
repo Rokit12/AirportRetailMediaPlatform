@@ -61,7 +61,7 @@ export function TerminalMap({ screens, zones, gates, onScreen, selected, heat = 
     <defs><radialGradient id="heat"><stop offset="0" style={{ stopColor: 'var(--signal)', stopOpacity: .85 }} /><stop offset="1" style={{ stopColor: 'var(--signal)', stopOpacity: 0 }} /></radialGradient></defs>
     {L.piers.map((p) => <g key={p.id}><rect x={p.x - 12} y={70} width={24} height={312} rx="6" fill="var(--surface-2)" stroke="var(--line-2)" /><text x={p.x} y={64} textAnchor="middle" fontSize="12" fill="var(--muted)" fontFamily="var(--cond)">{p.name.replace('Gates ', '')}</text></g>)}
     {L.terminals.map((tm) => <g key={tm.id}><rect x={tm.box.x} y={tm.box.y} width={tm.box.w} height={tm.box.h} rx="10" fill="var(--surface-2)" stroke="var(--line-2)" /><text x={tm.box.x + 10} y={tm.box.y + tm.box.h + 20} fontSize="15" fontWeight="700" fill="var(--text)">{tm.name}</text><text x={tm.box.x + 108} y={tm.box.y + tm.box.h + 20} fontSize="13" fill="var(--muted)">{tm.role}</text></g>)}
-    {heat && (zones || []).filter((z) => z.kind !== 'checkpoint' && z.n > 0).map((z) => { const r = 30 + 70 * Math.sqrt(z.n / zmax); return z.kind === 'pier' ? <rect key={z.id} x={L.piers.find((p) => p.id === z.id)?.x - 22} y="70" width="44" height="312" rx="20" style={{ fill: 'var(--signal)' }} opacity={0.08 + 0.42 * (z.n / zmax)} /> : <circle key={z.id} cx={z.x} cy={z.y} r={r} fill="url(#heat)" opacity={0.25 + 0.6 * (z.n / zmax)} />; })}
+    {heat && (zones || []).filter((z) => z.kind !== 'checkpoint' && z.n > 0).map((z) => { const r = 30 + 70 * Math.sqrt(z.n / zmax); return z.kind === 'pier' ? <rect key={z.zone || z.id} x={L.piers.find((p) => p.id === (z.zone || z.id))?.x - 22} y="70" width="44" height="312" rx="20" style={{ fill: 'var(--signal)' }} opacity={0.08 + 0.42 * (z.n / zmax)} /> : <circle key={z.zone || z.id} cx={z.x} cy={z.y} r={r} fill="url(#heat)" opacity={0.25 + 0.6 * (z.n / zmax)} />; })}
     {L.gates.map((g) => { const n = gates?.[g.id] || 0; return <g key={g.id}><rect x={g.x - 7} y={g.y - 7} width="14" height="14" rx="2" fill={n ? `color-mix(in srgb, var(--signal) ${Math.round(20 + 80 * n / gmax)}%, var(--surface))` : 'var(--surface)'} stroke="var(--line-2)" /><text x={g.x} y={g.y + 3.5} textAnchor="middle" fontSize="8" fill="var(--text)" fontFamily="var(--cond)">{g.code.replace('BUS', 'B')}</text></g>; })}
     {showScreens && (screens || []).map(([id, st]) => { const s = pos.get(id); if (!s) return null; const sel = selected === id; return <circle key={id} cx={s.x} cy={s.y} r={sel ? 6.5 : 3.6} fill={col[st]} stroke={sel ? 'var(--text)' : 'var(--surface)'} strokeWidth={sel ? 2 : 1} style={{ cursor: 'pointer' }} onClick={() => onScreen?.(id)}><title>{`${id} · ${s.name} · ${st}`}</title></circle>; })}
   </svg>;
@@ -77,6 +77,7 @@ export function WhyThisAd({ d, compactView = false }) {
     <div><div className="small muted">{t('Crowd in front of this screen')} · {int(d.profile.n)} pax · median dwell {d.profile.medianDwell} min</div>
       <CrowdBars shares={d.profile.shares} />
       <div className="small muted" style={{ marginTop: 4 }}>Flights: {d.profile.flights.slice(0, 4).map((f) => `${f.flightNo} → ${f.dest} (${f.n})${f.delayMin >= 10 ? ` +${f.delayMin}m` : ''}`).join(', ')}</div></div>
+    <FullProfile p={d.profile} open={!compactView} />
     <div><div className="small muted">{t('Top candidates')}</div>
       <table className="tbl"><thead><tr><th>Campaign</th><th className="r">Match</th><th className="r">Boost</th><th className="r">Final</th><th>Result</th></tr></thead><tbody>{top.map((c) => <tr key={c.campaignId}><td>{c.name}</td><td className="r num">{pct(c.match)}</td><td className="r num">{c.boost}</td><td className="r num"><b>{c.final.toFixed(2)}</b></td><td>{c.result === 'Plays' ? <Badge kind="sig">Plays</Badge> : <span className="small">{c.result}</span>}</td></tr>)}</tbody></table></div>
     <div className="callout"><div className="small muted">{t('Winning rule')}</div><b>{d.rule}</b>
@@ -84,6 +85,26 @@ export function WhyThisAd({ d, compactView = false }) {
       {!d.ai.verified && <div className="small" style={{ color: 'var(--bad)' }}>{d.ai.checks.filter((c) => !c.ok).map((c) => c.detail).join(' · ')}</div>}</div>
     {!compactView && <Evidence d={d} />}
   </div>;
+}
+const AGE = [['u12', 'Under 12'], ['a12_17', '12–17'], ['a18_24', '18–24'], ['a25_34', '25–34'], ['a35_44', '35–44'], ['a45_54', '45–54'], ['a55p', '55+']];
+/** Every crowd-profile attribute from the brief, as aggregated shares (never data about a person). */
+export function FullProfile({ p, open = true }) {
+  const [o, setO] = useState(open); if (!p?.shares) return null; const sh = p.shares;
+  const pairs = (arr) => (arr || []).map(([k, v, w]) => `${k}${typeof v === 'string' ? ` (${v})` : ''} ${pct(typeof v === 'number' ? v : w)}`).join(', ') || '—';
+  return <div className="callout"><button className="btn sm" onClick={() => setO(!o)} aria-expanded={o}>{o ? t('Hide full crowd profile') : t('Show full crowd profile')}</button>
+    {o && <div className="grid g3" style={{ marginTop: 8, gap: 10 }}>
+      <div><div className="small muted">{t('Crowd size')}</div><div className="num" style={{ fontSize: 20 }}>{int(p.n)} <span className="small muted">{t('now')}</span> · {p.n30 != null ? int(p.n30) : '—'} <span className="small muted">{t('in 30 min')}</span></div>
+        <div className="small muted" style={{ marginTop: 6 }}>{t('Time context')}</div><div className="small">{t('Median dwell')}: {p.medianDwell} min · {t('Max delay')}: {p.maxDelay || 0} min · {t('Hour')}: {p.hour != null ? `${String(p.hour).padStart(2, '0')}:00` : '—'}{p.festival ? ` · ${p.festival}` : ''}</div>
+        <div className="small muted" style={{ marginTop: 6 }}>{t('Destinations')}</div><div className="small">{pairs(p.topDest)}</div>
+        <div className="small muted" style={{ marginTop: 6 }}>{t('Arriving from / connecting')}</div><div className="small">{pairs(p.topVia)}</div></div>
+      <div><div className="small muted">{t('Trip purpose')}</div><HBars rows={[['Business', sh.business], ['Holiday', sh.holiday], ['Visiting family', sh.vfr], ['Student', sh.student], ['Religious', sh.religious]].map(([l, v]) => [t(l), v || 0])} />
+        <div className="small muted" style={{ marginTop: 6 }}>{t('Party type')}</div><HBars rows={[['Solo', sh.solo], ['Couple', sh.couple], ['Family with children', sh.family], ['Group', sh.group]].map(([l, v]) => [t(l), v || 0])} /></div>
+      <div><div className="small muted">{t('Age band')}</div><HBars rows={AGE.map(([k, l]) => [l, p.age?.[k] || 0])} />
+        <div className="small" style={{ marginTop: 6 }}>{t('Gender')}: {pct(sh.female)} {t('female')} · {pct(sh.male)} {t('male')}</div>
+        <div className="small">{t('Cabin')}: {t('Business')} {pct(p.cabin?.J)} · {t('Premium economy')} {pct(p.cabin?.W)} · {t('Economy')} {pct(p.cabin?.Y)} · {t('Frequent flyer')} {pct(sh.ff)}</div>
+        <div className="small">{t('Nationalities')}: {pairs(p.topNat)}</div><div className="small">{t('Languages')}: {pairs(p.topLang)}</div>
+        <div className="small">{t('International')} {pct(sh.intl)} · {t('Domestic')} {pct(sh.domestic)}</div></div>
+    </div>}</div>;
 }
 export function Evidence({ d }) {
   return <div><div className="small muted">Evidence trail (every input is a recorded data point)</div>
