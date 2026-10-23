@@ -1,0 +1,26 @@
+# One command: docker compose up  ->  http://localhost:8080
+# For phones on the same Wi-Fi to open the QR claim page:  LAN_IP=192.168.1.23 docker compose up
+services:
+  api:
+    build: { context: ., dockerfile: Dockerfile }
+    environment:
+      PORT: 8080
+      DB_PATH: /data/gateline.db
+      LAN_IP: ${LAN_IP:-}
+      WEB_PORT: ${WEB_PORT:-8080}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      CURRENCY: ${CURRENCY:-USD}
+      CURRENCY_SYMBOL: ${CURRENCY_SYMBOL:-$}
+      AODB_SOURCE: ${AODB_SOURCE:-mock-csv}
+      FLIGHT_SOURCE: ${FLIGHT_SOURCE:-mock-aidx}
+      ACRIS_SOURCE: ${ACRIS_SOURCE:-mock-ngsi-ld}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes: [gateline-data:/data]
+    healthcheck: { test: ["CMD", "node", "-e", "fetch('http://localhost:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], interval: 10s, retries: 6 }
+  web:
+    build: { context: ., dockerfile: Dockerfile.web }
+    ports: ["${WEB_PORT:-8080}:80"]
+    depends_on: { api: { condition: service_healthy } }
+volumes:
+  gateline-data:

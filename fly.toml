@@ -1,0 +1,18 @@
+# fly launch --copy-config --no-deploy && fly deploy
+app = "gateline-playground"
+primary_region = "jnb"
+[build]
+  dockerfile = "Dockerfile"
+[env]
+  PORT = "8080"
+  DB_PATH = "/tmp/gateline.db"
+  PUBLIC_BASE_URL = "https://gateline-playground.fly.dev"
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  min_machines_running = 1
+[[http_service.checks]]
+  path = "/api/health"
+  interval = "15s"
+  timeout = "3s"

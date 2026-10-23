@@ -1,0 +1,24 @@
+{
+  "name": "@gateline/web",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:playground": "vite build --mode playground",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@gateline/core": "1.0.0",
+    "@fontsource/barlow": "^5.0.14",
+    "@fontsource/barlow-condensed": "^5.0.14",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.8",
+    "vite-plugin-singlefile": "^2.0.2"
+  }
+}
