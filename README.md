@@ -1,0 +1,161 @@
+# Gateline — airport retail media platform (POC)
+
+Gateline puts the right offer on the right airport screen for the passengers actually standing in front of it.
+Live flight data (AODB, IATA AIDX) and passenger-flow data (ACI ACRIS) are turned into a **crowd profile per
+screen per 5-minute window**, and every 15-second slot goes to the campaign that best matches that crowd —
+with every decision traceable to recorded data points.
+
+All data describes the fictional **Meridian International (MQI)** from the challenge samples. There are no real
+airports, airlines or brands, and no per-passenger data anywhere in the system.
+
+| | |
+|---|---|
+| **Hosted playground** | https://claude.ai/artifact/DmrpWyhUXRzKvatrJLzbbR (pre-configured; runs the full engine in the page) |
+| **Local, one command** | `docker compose up` → http://localhost:8080 |
+| **Without Docker** | `npm install && npm start` → http://localhost:8080 (Node 22.5+) |
+| **API spec** | `docs/openapi.json` or `GET /api/openapi.json` |
+| **Tests** | `npm test` (adapters against the attached samples, worked example, cause-and-effect, promo codes) |
+
+---
+
+## 1. What to look at in a 15-minute demo
+
+The full script is in [`docs/demo-script.md`](docs/demo-script.md). The 60-second version:
+
+1. **Passenger → Gate 42 holdroom.** At 14:02, Saffron Gulf's upgrade offer is playing because XY501 is in its boarding window (airline priority rule).
+2. **Press "Delay XY501 +45 min"** in the simulation bar. An IATA AIDX `FlightLegNotifRQ` is built and pushed through the AIDX adapter. Within one tick:
+   - the FIDS strip shows *Delayed 15:20*;
+   - the screen switches to *Duty-free fragrance, 15% off*, because the retailer's trigger rule (Gulf flight delayed 30+ min at gates 40–45 → ×1.5) fires;
+   - the airline view shows the delay;
+   - the zone's footfall forecast rises because XY501's passengers now stay airside 45 minutes longer.
+3. **Press "Why this ad?"** to see the crowd profile bars, the top 3 candidates with scores, the winning rule, and the AI verification checks with the full evidence trail.
+4. **Scan the QR with a phone** (or click it). Redeem the code, and the redemption lands on *Retailer → Meridian Duty Free* within a second. You can also *Share with family* to issue a second code.
+5. **Split screen** (header) puts the passenger screen on the left and any dashboard on the right.
+
+The **"Worked example" button** reproduces the challenge table exactly: Gate 42 at 14:10, XY501 to the Gulf hub (240 pax, +45 min) plus ZQ88 to a beach destination (180 pax). The resulting crowd is holiday 58%, family 31%, business 22%, international 57%, with a median dwell of 52 min.
+
+| Candidate | Audience match | Boost | Final | Result |
+|---|---|---|---|---|
+| Duty-free fragrance, 15% off | 71% | 1.5 (delay rule) | **0.86** | Plays |
+| Toy store, buy 2 get 1 | 49% | 1.0 | 0.52 | Next in rotation |
+| Business lounge day pass | 18% | 1.0 | 0.21 | Below its 25% match floor here; served at better-fit gates |
+
+This is asserted in `packages/core/test/core.test.js`. DXB is shown as **ZHQ (Zarhan)**, the fictional Gulf hub from the samples, because the product carries no real airport codes.
+
+## 2. Roles and screens
+
+There is no login. Use the role switcher in the header. The Retailer and Airline roles also have a company switcher (Meridian Duty Free / Driftwood Coffee / Kite & Kin Toys; Skylark Air (low-cost) / Halcyon Airways / Saffron Gulf Airways (full-service)).
+
+| Role | Pages | Highlights |
+|---|---|---|
+| **Platform Admin** (dark control-room theme) | Overview · Decision engine · Master data · Incidents · Data feeds | Live SVG network map of T1/T2 with every screen coloured online/degraded/offline and a passenger heat overlay. KPI strip (screens online %, plays, impressions, revenue in configurable currency, active campaigns, latency). Auto-raised incidents (screen offline > 5 min, feed lag, AI rejection) with owner and status. Full CRUD for vendors, outlets, airlines, zones, gates and screens. Rule-engine settings and a searchable decision log with evidence drawer. Feed health, raw message stream, and a box to paste any AIDX XML through the adapter. API p95, playlist build time, 7-day uptime. |
+| **Retailer** | Dashboard · Campaigns · Creatives · Promo codes · History | Live impressions, scans, redemptions, conversion and revenue. Passenger flow near the store for the next 2 h ("Next 60 min: 2,692 pax, 67% international, top: ZHQ, LMW, SMG"). Campaign builder with live audience-match preview ("Matches 64% of the crowd at … expected 3,100 impressions and 95 redemptions"), mock-screen preview, trigger rules, schedule, budget and "best 3 slots tomorrow". Performance by segment ("Families redeemed 3.2x their share") with one-click weight suggestions. A/B creatives, budget pacing, out-of-stock toggle (pauses the promo network-wide). GenAI creative assistant in EN + Kiswahili. Time-boxed codes, history with ROI and "run again". |
+| **Media Manager** | Inventory · Approvals · Advertisers · Matching · Packages | Screen × hour calendar (available / partly booked / premium / sold) with a suggested price per cell driven by predicted presence. 7-day occupancy and revenue forecast, plus a price book. Approval queue with brand-safety checklist. Top advertisers, under-delivery flags, one-click printable/shareable report. Segment × hour heatmap per zone, an A-vs-B conflict explainer, manual pin/override with a logged reason, and a package builder. |
+| **Airline Rep** | My flights · Gate messaging · Delay goodwill · Partners | Departures list and day timeline (delays in amber), aggregated crowd profile of their passengers. Sponsored content restricted to their own boarding window. "What played at my gates and why". Delay goodwill automation: past a threshold, a meal voucher co-funded with an F&B partner is auto-pushed to that gate with airline priority. Co-marketing marketplace ranked by fit, accepted in one click. Performance. |
+| **Passenger** | Screen simulator | Any of the 182 screens in 16:9 or 9:16. FIDS strip of nearby departures, bilingual rotation, QR with a live countdown that expires when the linked flight closes boarding, and the "Why this ad?" overlay. |
+
+The **simulation bar** is visible to all roles: play/pause, 1x/10x/60x, jump to time, "inject event" (delay, gate change, screen offline, feed lag, AI hallucination), worked example, and reset.
+
+## 3. Architecture
+
+```
+            ┌────────────── adapters (only place that knows source formats) ──────────────┐
+AODB CSV ──▶│ AodbCsvAdapter / VendorApiAodbSource      ─┐                                 │
+AIDX XML ──▶│ MockAidxFeed / VendorAidxFeed  (stream)    ├─▶ canonical model ─▶ ZonePresence │
+NGSI-LD  ──▶│ MockAcrisFeed / OrionLdAcrisFeed           ─┘   Flight, FlightEvent,          │
+            └──────────────────────────────────────────────── QueueMeasurement ────────────┘
+                                                                     │
+         Decision pipeline per screen per 15 s slot:  Profile → Filter → Score (AI agent)
+         → Verify (deterministic) → Business rules → Choose & log → Learn
+                                                                     │
+      @gateline/core  (engine + read models + REST route table, zero dependencies)
+            │                                            │
+   apps/server (Fastify, SQLite, SSE)              apps/web (React, Vite)
+   REST /api/*, /api/stream, OpenAPI               role dashboards, passenger screen, claim page
+```
+
+More detail, including a Mermaid diagram, the decision pipeline and the data model, is in [`docs/architecture.md`](docs/architecture.md).
+
+**Stack and why.**
+- **Node 22 + Fastify** for the backend. Both are widely used and actively maintained, Fastify is fast and has first-class schemas, and Node 22 ships `node:sqlite` so there is no native build step.
+- **SQLite** (embedded, with migrations and a seed script) for storage. No paid or cloud services are needed.
+- **React 18 + Vite** for the frontend. This is the most common modern web stack.
+- **Server-Sent Events** for live updates. They are one-way, proxy-friendly, and auto-reconnect.
+
+The core is plain ES modules with no dependencies, so **the identical engine, adapters and route table run in Node and in the browser**. That is how the hosted playground works without a server.
+
+**Separation.** The frontend talks only to the REST API and the SSE stream. Business logic never sees CSV columns, XML or NGSI-LD: adapters translate into the canonical model (`packages/core/src/model.js`).
+
+## 4. Data and adapters
+
+| Source | Mock format (fixtures in `data/`) | Adapter (`packages/core/src/adapters/`) | Canonical |
+|---|---|---|---|
+| AODB flight movements | 33-column CSV, identical to the attached sample. The generator keeps the 320 sample legs and adds ~580 more to reach 900. | `aodb.js` — `MockAodbSource`, `VendorApiAodbSource` | `Flight` |
+| IATA AIDX | `IATA_AIDX_FlightLegNotifRQ` XML. The day is replayed as messages on the sim clock; injected events use the same XML path. The attached XH960 sample parses unchanged. | `aidx.js` — `MockAidxFeed`, `VendorAidxFeed` | `FlightEvent` |
+| ACI ACRIS (FIWARE) | NGSI-LD normalized entities (`TerminalFacility`, `ConcourseFacility`, `CheckpointFacility`, `QueueMeasurement`). Official examples are in `data/samples/acris/`. | `acris.js` — `MockAcrisFeed`, `OrionLdAcrisFeed` | `Terminal`, `Zone`, `Checkpoint`, `QueueMeasurement` |
+| Platform-owned | SQLite tables (`apps/server/migrations/001_init.sql`) | — | `Screen`, `Advertiser`, `Outlet`, `Campaign`, `Creative`, `PromoCode`, `Redemption`, `Incident` |
+
+Each source is switched with **one config value**: `AODB_SOURCE=mock-csv|vendor-api`, `FLIGHT_SOURCE=mock-aidx|vendor-api`, `ACRIS_SOURCE=mock-ngsi-ld|orion-ld`. Going live means writing one adapter class and nothing else; the step-by-step is in [`docs/adapters.md`](docs/adapters.md).
+
+**Mock scale** (seeded and deterministic): 900 flights, 182 screens, 40 outlets, 13 fictional airlines, 26 campaigns with creatives in English and Kiswahili, 30 days of daily history, partner offers and packages. `npm run seed` regenerates the data, and writes `data/generated/MQI_aodb_flights_2026-10-14_GENERATED.csv` and the ACRIS entity set.
+
+**Crowd profiles** are aggregated shares per flight: trip purpose, party type, age band, gender, cabin/spend tier, frequent-flyer share, top nationalities and languages, dwell, delay and crowd size. They follow plausibility rules: weekday peaks skew business 25–44, while Friday evening and holiday routes skew families and couples. The mid-term school break and the festival in the event calendar raise families and VFR. Profiles are rolled up per screen, weighted by gate proximity and time to boarding.
+
+## 5. AI decision pipeline (evidence-first)
+
+1. **Profile.** The crowd for the screen's catchment is computed from flights at nearby gates (pax × airside curve) and ACRIS queue data.
+2. **Filter.** Each campaign is checked against hard rules: schedule and daypart, placement, approval, stock, budget, domestic/international, region and destination, dwell, crowd size, brand safety (adult products are kept away from family-heavy crowds), own boarding window for airlines, and goodwill binding.
+3. **Score.** `final = wMatch · min(1, match × trigger boost) + wPerf · learned conversion`, × budget pacing. `match` is the weighted mean of per-segment saturation (`seg-model 2.1`).
+4. **AI proposes, rules verify.** The agent (offline mock by default; LLM pluggable) ranks the candidates and *cites evidence ids*. The proposal is executed only if all four checks pass:
+   - every cited input exists in a trusted feed;
+   - every cited input is fresh (AIDX ≤ 300 s, ACRIS ≤ 900 s, …);
+   - the chosen campaign passes every hard rule;
+   - the claimed score is reproducible from the logged inputs (±0.01).
+
+   Otherwise the screen falls back to the rule-based default. Use *Inject event → AI fault* to watch a fabricated "XY999 delayed 95 min" get rejected, or *Feed lag* to watch stale data be refused.
+5. **Business rules.** In order: manual pin → airline priority in its boarding window → competitor separation → frequency cap → max consecutive plays → exploration (5%, never on triggered slots).
+6. **Choose and log.** Every decision stores the profile, candidates, scores, result reasons, AI checks and evidence trail. It is visible in every role.
+7. **Learn.** Scans and redemptions per segment update each campaign's conversion estimate and drive the segment lift reports.
+
+## 6. Configuration
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` | 8080 | API port (also serves the built web app). |
+| `LAN_IP` / `PUBLIC_BASE_URL` | — | Base URL encoded in QR codes, so a phone on the same Wi-Fi (or the public URL) opens `/claim/<code>`. |
+| `CURRENCY`, `CURRENCY_SYMBOL` | USD, $ | Revenue currency. Also editable in Admin → Decision engine. |
+| `AODB_SOURCE`, `FLIGHT_SOURCE`, `ACRIS_SOURCE` | mocks | Adapter selection. |
+| `AODB_VENDOR_URL`, `AIDX_VENDOR_URL`, `ACRIS_BROKER_URL` | — | Live endpoints for the stub adapters. |
+| `AI_PROVIDER`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | mock | Real LLM for creative copy and "re-rank this slot". The demo needs no key. |
+| `DB_PATH` | `data/gateline.db` | SQLite file. |
+| `SIM_START` | 2026-10-14T14:02Z | Simulation start time. |
+
+**White-label.** `apps/web/src/theme.config.js` holds the product name, mark, colours, second language (Kiswahili by default) and currency. UI strings live in `apps/web/src/i18n.js`. To add another language, add a dictionary there and add copy keys to the creatives.
+
+## 7. Deploying a public playground
+
+The hosted playground link above runs the whole engine in the browser. To host the full client–server build instead:
+
+- **Render.** New → Blueprint → this repo. `render.yaml` is included; set `PUBLIC_BASE_URL` to the service URL.
+- **Fly.io.** `fly launch --copy-config --no-deploy && fly deploy` (uses `fly.toml`).
+- **Any container host.** `docker build -t gateline . && docker run -p 8080:8080 -e PUBLIC_BASE_URL=https://your.host gateline`.
+
+The service seeds itself on first boot. No external services are required.
+
+## 8. Project layout
+
+```
+packages/core/       engine, presence model, decision pipeline, adapters, generator, read models, REST route table, tests
+apps/server/         Fastify API, SQLite migrations + seed, SSE stream, OpenAPI
+apps/web/            React app (5 roles, passenger simulator, mobile claim page); `--mode playground` builds the single-file hosted demo
+data/samples/        the challenge samples (AODB CSV, AIDX XML) + official ACRIS examples
+docs/                architecture, adapter guide, demo script, openapi.json
+```
+
+## 9. Known limits (POC)
+
+- **Simulated audiences.** Impressions and baseline scans are simulated from presence × screen visibility. Real phone redemptions are recorded individually and flagged `live`.
+- **Simulated clock.** The simulation runs over one operating day (14 Oct 2026, the sample date). Jumping rebuilds the day up to the target time in about 1 second.
+- **LLM ranking on demand only.** The LLM ranker runs on demand ("re-rank this slot") rather than for every slot of every screen; the per-slot agent is the deterministic mock. Both paths go through the same verifier.
+- **Playground QR claims.** In the hosted playground, a phone can record a claim only if it is signed in to claude.ai with access to the artifact. The claim is relayed to the presenting session through the artifact's database. Clicking the QR always opens the claim page in-app.
+# AirportRetailMediaPlatform
