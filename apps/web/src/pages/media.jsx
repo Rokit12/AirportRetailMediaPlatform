@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { THEME } from '../theme.config.js';
 import { api } from '../api.js';
 import { useApp, useApi, Panel, Kpi, PageHead, Badge, Bars, BarAxis, Field, Modal, Tabs, Seg, int, compact, money, hm, pct, statusKind, t, Empty, HBars } from '../components/ui.jsx';
 import { AdRender } from '../components/ad.jsx';
+import { BrandMark } from '../components/brand.jsx';
 
-const CELL = { sold: '#14181D', premium: '#FFC425', partial: 'color-mix(in srgb, var(--data) 45%, var(--surface))', available: 'var(--surface-2)' };
+const CELL = { sold: 'var(--signal-ink)', premium: 'var(--signal)', partial: 'color-mix(in srgb, var(--data) 45%, var(--surface))', available: 'var(--surface-2)' };
 export function MediaInventory() {
   const { config, live } = useApp(); const [zone, setZone] = useState('T2-P40'); const [day, setDay] = useState(0);
   const [inv] = useApi(`/api/media/inventory?zone=${zone}&day=${day}`, { minMs: 15000 }); const [y] = useApi('/api/media/yield', { minMs: 30000 });
@@ -28,6 +30,7 @@ const CHECKS = [['claims', 'Offer claims are accurate and time-boxed'], ['legal'
 export function MediaApprovals() {
   const { toast, lang } = useApp(); const [q, reload] = useApi('/api/media/approvals', { minMs: 3000 }); const [ck, setCk] = useState({}); const [note, setNote] = useState('');
   const act = async (c, decision) => { try { await api.post(`/api/campaigns/${c.id}/approve`, { decision, checklist: Object.fromEntries(CHECKS.map(([k]) => [k, !!ck[c.id]?.[k] || (k === 'alcohol' && !c.brandSafety?.adultOnly)])), note }); toast(`${c.name} ${decision === 'approve' ? 'approved and live' : 'rejected'}`); reload(); } catch (e) { toast(e.message, 'incident'); } };
+  const actCr = async (cr, decision) => { try { await api.post(`/api/creatives/${cr.id}/approve`, { decision, checklist: Object.fromEntries(CHECKS.filter(([k]) => k !== 'alcohol').map(([k]) => [k, !!ck[cr.id]?.[k]])), note }); toast(`${cr.name} ${decision === 'approve' ? 'approved' : 'rejected'}`); reload(); } catch (e) { toast(e.message, 'incident'); } };
   return <>
     <PageHead title={t('Approvals')}><span className="small muted">{q?.campaigns.length ?? 0} campaigns · {q?.creatives.length ?? 0} creatives waiting</span></PageHead>
     {q?.campaigns.map((c) => <Panel key={c.id} title={c.name} right={<span className="small muted">{c.advertiser} · submitted {c.approval.submittedAt?.slice(11, 16)}</span>} style={{ marginBottom: 14 }}>
@@ -41,7 +44,20 @@ export function MediaApprovals() {
           <div className="row"><button className="btn pri" onClick={() => act(c, 'approve')}>Approve</button><button className="btn danger" onClick={() => act(c, 'reject')}>Reject</button></div>
         </div>
       </div></Panel>)}
-    {q && !q.campaigns.length && <Empty>The approval queue is empty. New campaigns from retailers and airlines land here.</Empty>}
+    {q?.creatives.length > 0 && <h3 style={{ margin: '18px 0 8px' }}>{t('Creatives awaiting review')}</h3>}
+    {q?.creatives.map((cr) => <Panel key={cr.id} title={cr.name} right={<span className="small muted">{cr.advertiser} · {cr.source} · {cr.createdAt?.slice(0, 10)}</span>} style={{ marginBottom: 14 }}>
+      <div className="grid g2" style={{ alignItems: 'start' }}>
+        <div className="col"><div style={{ aspectRatio: '16/9', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line)' }}><AdRender creative={cr} lang="en" scale={0.42} /></div><div style={{ aspectRatio: '16/9', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line)' }}><AdRender creative={cr} lang="sw" scale={0.42} /></div></div>
+        <div className="col">
+          <div className="small">{cr.usedBy.length ? `${t('Used by')}: ${cr.usedBy.join(', ')}` : t('Not yet attached to a campaign')}</div>
+          {cr.problems.length ? <div className="callout" style={{ borderColor: 'var(--bad)' }}><b style={{ color: 'var(--bad)' }}>{t('Automatic checks failed')}</b>{cr.problems.map((p) => <div key={p} className="small">✗ {p}</div>)}</div> : <div className="small" style={{ color: 'var(--ok)' }}>✓ {t('Automatic checks passed (template, both languages, contrast, asset loads)')}</div>}
+          <div className="small muted">{t('Brand-safety checklist')}</div>
+          {CHECKS.filter(([k]) => k !== 'alcohol').map(([k, l]) => <label key={k} className="row small"><input type="checkbox" checked={!!ck[cr.id]?.[k]} onChange={(e) => setCk({ ...ck, [cr.id]: { ...ck[cr.id], [k]: e.target.checked } })} />{t(l)}</label>)}
+          <Field label={t('Note to advertiser')}><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+          <div className="row"><button className="btn pri" disabled={cr.problems.length > 0} onClick={() => actCr(cr, 'approve')}>{t('Approve')}</button><button className="btn danger" onClick={() => actCr(cr, 'reject')}>{t('Reject')}</button></div>
+        </div>
+      </div></Panel>)}
+    {q && !q.campaigns.length && !q.creatives.length && <Empty>The approval queue is empty. New campaigns and creatives from retailers and airlines land here.</Empty>}
   </>;
 }
 
@@ -65,7 +81,7 @@ export function MediaReport() {
   return <div style={{ maxWidth: 980 }}>
     <div className="row noprint" style={{ marginBottom: 10 }}><button className="btn" onClick={() => nav('advertisers')}>Back</button><div className="grow" /><button className="btn" onClick={() => { navigator.clipboard?.writeText(link); toast('Shareable link copied'); }}>Copy shareable link</button><button className="btn pri" onClick={() => window.print()}>Save as PDF</button></div>
     <div className="panel"><div className="panel-b">
-      <div className="row sp"><div><div className="small muted">Advertiser report · Meridian Airport Media</div><h1 style={{ margin: '2px 0' }}>{r.advertiser.name}</h1><div className="small muted">Generated {new Date(r.generatedAt).toISOString().slice(0, 16).replace('T', ' ')} · last 30 days + today · {r.currency}</div></div><div className="brand"><span className="mark" style={{ width: 40, height: 40 }} /></div></div>
+      <div className="row sp"><div><div className="small muted">{t('Advertiser report')} · {THEME.operator}</div><h1 style={{ margin: '2px 0' }}>{r.advertiser.name}</h1><div className="small muted">Generated {new Date(r.generatedAt).toISOString().slice(0, 16).replace('T', ' ')} · last 30 days + today · {r.currency}</div></div><BrandMark size={40} radius={8} /></div>
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(4,1fr)', margin: '14px 0' }}><Kpi label="Spend" value={money(r.totals.spend, config)} /><Kpi label="Impressions" value={compact(r.totals.impressions)} /><Kpi label="Redemptions" value={int(r.totals.redemptions)} /><Kpi label="Attributed revenue" value={money(r.totals.revenue, config)} sub={r.totals.spend ? `ROI ${((r.totals.revenue - r.totals.spend) / r.totals.spend).toFixed(2)}x` : ''} /></div>
       <table className="tbl"><thead><tr><th>Campaign</th><th>Status</th><th className="r">Spend</th><th className="r">Impressions</th><th className="r">Redemptions</th><th className="r">ROI</th></tr></thead><tbody>{r.campaigns.map((c) => <tr key={c.id}><td>{c.name}</td><td>{c.status}</td><td className="r num">{money(c.spend, config)}</td><td className="r num">{compact(c.impressions)}</td><td className="r num">{int(c.redemptions)}</td><td className="r num">{c.roi ?? '—'}</td></tr>)}</tbody></table>
       {r.segments.filter((s) => s.headline).map((s) => <p key={s.campaign}><b>{s.campaign}:</b> {s.headline}.</p>)}
@@ -83,7 +99,7 @@ export function MediaMatching() {
   return <>
     <PageHead title={t('Matching')}><span className="small muted">Segment model {config.segmentModel}</span></PageHead>
     <Panel title="Segment heatmap: audience volume by segment × hour" right={<select className="inp" value={zone} onChange={(e) => setZone(e.target.value)}>{config.layout.zones.filter((z) => z.kind !== 'checkpoint').map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}</select>} flush>
-      {hm_ && <div className="scroll"><table className="tbl" style={{ fontSize: 11.5 }}><thead><tr><th>Segment</th>{hm_.hours.map((h) => <th key={h} style={{ padding: '6px 2px', textAlign: 'center' }}>{h}</th>)}</tr></thead><tbody>{hm_.segments.map((s, i) => <tr key={s.segment}><td style={{ whiteSpace: 'nowrap' }}>{s.label}</td>{hm_.cells[i].map((v, h) => <td key={h} title={`${s.label} ${h}:00 · ${int(v)} pax`} style={{ padding: 1 }}><div style={{ height: 20, borderRadius: 2, background: `color-mix(in srgb, #FFC425 ${Math.round(100 * Math.sqrt(v / max))}%, var(--surface-2))` }} /></td>)}</tr>)}</tbody></table></div>}
+      {hm_ && <div className="scroll"><table className="tbl" style={{ fontSize: 11.5 }}><thead><tr><th>Segment</th>{hm_.hours.map((h) => <th key={h} style={{ padding: '6px 2px', textAlign: 'center' }}>{h}</th>)}</tr></thead><tbody>{hm_.segments.map((s, i) => <tr key={s.segment}><td style={{ whiteSpace: 'nowrap' }}>{s.label}</td>{hm_.cells[i].map((v, h) => <td key={h} title={`${s.label} ${h}:00 · ${int(v)} pax`} style={{ padding: 1 }}><div style={{ height: 20, borderRadius: 2, background: `color-mix(in srgb, var(--signal) ${Math.round(100 * Math.sqrt(v / max))}%, var(--surface-2))` }} /></td>)}</tr>)}</tbody></table></div>}
     </Panel>
     <div className="grid g2" style={{ marginTop: 14 }}>
       <Panel title="Conflict view: why A beat B">

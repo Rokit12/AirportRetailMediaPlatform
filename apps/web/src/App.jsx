@@ -4,6 +4,7 @@ import { Ctx, t } from './components/ui.jsx';
 import { SimBar } from './components/shared.jsx';
 import { setLang as setI18n } from './i18n.js';
 import { THEME } from './theme.config.js';
+import { BrandMark } from './components/brand.jsx';
 import { AdminOverview, AdminDecisions, AdminMaster, AdminIncidents, AdminFeeds } from './pages/admin.jsx';
 import { RetailerDashboard, RetailerCampaigns, RetailerCreatives, RetailerPromos, RetailerHistory } from './pages/retailer.jsx';
 import { MediaInventory, MediaApprovals, MediaAdvertisers, MediaReport, MediaMatching, MediaPackages } from './pages/media.jsx';
@@ -24,7 +25,9 @@ function parseHash() {
   return null;
 }
 
-export default function App({ config: cfg0 }) {
+export default function App({ config: cfgInit }) {
+  const [cfg0, setCfg0] = useState(cfgInit);
+  const reloadConfig = () => api.get('/api/config').then(setCfg0).catch(() => {});
   const config = useMemo(() => ({ ...cfg0, secondLanguage: THEME.secondLanguage }), [cfg0]);
   const init = parseHash() || { role: 'admin', page: 'overview', params: {} };
   const [role, setRole] = useState(init.role); const [page, setPage] = useState(init.page); const [params, setParams] = useState(init.params);
@@ -42,12 +45,12 @@ export default function App({ config: cfg0 }) {
   const switchRole = (r) => { setRole(r); setPage(ROLES[r].pages[0][0]); setParams({}); };
   const setLang = (l) => { setI18n(l); setLangS(l); };
   const Page = (R.pages.find((p) => p[0] === page) || R.pages[0])[2];
-  const ctx = { config, live, role, page, params, nav, company, setCompany: (c) => setCompanies({ ...companies, [role]: c }), lang, toast };
+  const ctx = { config, reloadConfig, live, role, page, params, nav, company, setCompany: (c) => setCompanies({ ...companies, [role]: c }), lang, toast };
   if (!live) return <div className="loading">Connecting to the simulation…</div>;
   return <Ctx.Provider value={ctx}>
     <div className="app">
       <header className="hdr">
-        <div className="brand"><span className="mark"><svg width="18" height="18" viewBox="0 0 32 32"><path d="M6 24h20M16 6v18M9 13l7-7 7 7" stroke="#14181D" strokeWidth="3.4" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg></span>{THEME.productName}<small>{config.airport.name} ({config.airport.iata})</small></div>
+        <div className="brand"><BrandMark size={28} />{THEME.productName}<small>{config.airport.name} ({config.airport.iata})</small></div>
         <nav className="roles" aria-label="Role">{Object.entries(ROLES).map(([k, r]) => <button key={k} aria-pressed={role === k} onClick={() => switchRole(k)}><span className="glyph">{r.glyph}</span>{t(r.label)}</button>)}</nav>
         <div className="grow" />
         {R.companies && <select value={company} onChange={(e) => ctx.setCompany(e.target.value)} aria-label="Company">{R.companies(config).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>}
@@ -58,7 +61,7 @@ export default function App({ config: cfg0 }) {
       <div className={`body ${split ? 'split' : ''}`}>
         {split ? <div className="side" style={{ padding: 12, background: 'var(--bg)' }}><PassengerScreen embedded /></div>
           : <aside className="side"><h4>{t(R.label)}</h4>{R.pages.filter((p) => p[1]).map(([k, l]) => <button key={k} aria-current={page === k ? 'page' : undefined} onClick={() => { setPage(k); setParams({}); }}>{t(l)}</button>)}
-            <div className="company muted">{MODE === 'playground' ? 'Hosted playground: the full engine runs in this page.' : 'Connected to the Gateline API.'}<br />Data: fictional Meridian International (MQI). No passenger-level data.</div></aside>}
+            <div className="company muted">{MODE === 'static' ? t('Static demo: the full engine runs in this page.') : t('Connected to the API.')}<br />{t('Data: fictional airport, airlines and brands. No passenger-level data.')}</div></aside>}
         <main className="main" key={`${role}-${company}`}>{role === 'passenger' && split ? <AdminOverviewFallback /> : <Page />}</main>
       </div>
       <div className="toasts" aria-live="polite">{toasts.map((x) => <div key={x.id} className={`toast ${x.kind}`}>{x.text}</div>)}</div>

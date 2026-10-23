@@ -1,12 +1,12 @@
 # fly launch --copy-config --no-deploy && fly deploy
-app = "gateline-playground"
+app = "airportretailmediaplatform"
 primary_region = "jnb"
 [build]
   dockerfile = "Dockerfile"
 [env]
   PORT = "8080"
   DB_PATH = "/tmp/gateline.db"
-  PUBLIC_BASE_URL = "https://gateline-playground.fly.dev"
+  PUBLIC_BASE_URL = "https://airportretailmediaplatform.fly.dev"
 [http_service]
   internal_port = 8080
   force_https = true

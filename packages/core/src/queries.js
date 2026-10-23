@@ -3,7 +3,7 @@ import { MIN, HOUR, DAY, round, fmtHM, iso } from './util/time.js';
 import { presenceIndex, zoneContribs, screenContribs, aggregate, airsideFraction, dwellMin } from './presence.js';
 import { audienceMatch, finalScore } from './decision/score.js';
 import { placementMatch, evaluateTriggers } from './decision/pipeline.js';
-import { AIRPORTS, SEGMENTS, AGE_LABEL, SEGMENT_MODEL_VERSION } from './reference.js';
+import { AIRPORTS, SEGMENTS, AGE_LABEL, SEGMENT_MODEL_VERSION, AIRCRAFT } from './reference.js';
 
 const sum = (a, f = (x) => x) => a.reduce((s, x) => s + f(x), 0);
 const DOW_FACTOR = [1.08, 0.97, 0.9, 1.0, 1.02, 1.12, 1.05]; // Sun..Sat
@@ -282,5 +282,17 @@ export function airlinePerformance(e, code) {
   const camps = e.campaigns.filter((c) => c.airline === code);
   const rows = camps.map((c) => ({ id: c.id, name: c.name, kind: c.kind, status: c.status, ...campaignStats(e, c).today }));
   return { campaigns: rows, totals: { imps: sum(rows, (r) => r.imps), red: sum(rows, (r) => r.red), revenue: sum(rows, (r) => r.revenue) }, goodwill: e.goodwillLog.filter((g) => e.flights.get(g.flightId)?.airline === code) };
+}
+// ---------- canonical GateAssignment / AircraftType ----------
+export function gateAssignments(e, { gate, flight, changed } = {}) {
+  return e.flightArr.filter((f) => f.direction === 'D' && f.status !== 'CNL' && f.gate).map((f) => ({
+    id: `GA-${f.id}`, flightId: f.id, flightNo: f.flightNo, terminal: f.terminal, gate: f.gateCode, gateId: f.gate,
+    plannedGate: f.plannedGateCode || f.gateCode, changed: !!f.plannedGateCode && f.plannedGateCode !== f.gateCode, changedAt: f.gateChangedAt || null,
+    from: f.est - 50 * MIN, to: f.est + 5 * MIN, boardingFrom: f.est - 30 * MIN, source: f.source, lastMsgId: f.lastMsgId || null,
+  })).filter((a) => (!gate || a.gate === gate || a.gateId === gate) && (!flight || a.flightNo === flight) && (!changed || a.changed)).sort((a, b) => a.from - b.from);
+}
+export function aircraftTypes(e) {
+  const use = {}; for (const f of e.flightArr) use[f.acType] = (use[f.acType] || 0) + 1;
+  return Object.entries(AIRCRAFT).map(([icao, a]) => ({ icao, name: a.name, body: a.body, seatConfig: a.cfg, fullServiceConfig: a.fsc || null, seats: Object.values(a.cfg).reduce((x, y) => x + y, 0), legsToday: use[icao] || 0 })).sort((a, b) => b.legsToday - a.legsToday);
 }
 export { hourlyScreenProfiles, AGE_LABEL, SEGMENT_MODEL_VERSION };

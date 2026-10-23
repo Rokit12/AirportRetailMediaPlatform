@@ -22,6 +22,8 @@ export function migrate(db) {
 }
 const J = JSON.stringify;
 export const put = {
+  terminals: (db, r) => db.prepare('INSERT OR REPLACE INTO terminals VALUES (?,?,?)').run(r.id, r.name, J(r)),
+  impressions: (db, r) => db.prepare('INSERT OR REPLACE INTO impressions VALUES (?,?,?,?,?,?,?,?,?,?)').run(r.date, r.hour, r.campaignId, r.screenId, r.plays, r.impressions, r.scans, r.redemptions, r.liveRedemptions || 0, r.spend),
   advertisers: (db, r) => db.prepare('INSERT OR REPLACE INTO advertisers VALUES (?,?,?,?)').run(r.id, r.name, r.type, J(r)),
   airlines: (db, r) => db.prepare('INSERT OR REPLACE INTO airlines VALUES (?,?,?)').run(r.iata, r.name, J(r)),
   zones: (db, r) => db.prepare('INSERT OR REPLACE INTO zones VALUES (?,?,?,?)').run(r.id, r.terminal, r.kind, J(r)),

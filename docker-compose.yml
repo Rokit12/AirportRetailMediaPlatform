@@ -15,7 +15,9 @@ services:
       FLIGHT_SOURCE: ${FLIGHT_SOURCE:-mock-aidx}
       ACRIS_SOURCE: ${ACRIS_SOURCE:-mock-ngsi-ld}
       AI_PROVIDER: ${AI_PROVIDER:-mock}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
     volumes: [gateline-data:/data]
     healthcheck: { test: ["CMD", "node", "-e", "fetch('http://localhost:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], interval: 10s, retries: 6 }
   web:

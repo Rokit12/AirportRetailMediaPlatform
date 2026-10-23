@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
+import { THEME } from '../theme.config.js';
 import { adCopy } from '../i18n.js';
 
 // Pictograms drawn in the airport-signage idiom: single stroke weight, rounded joins.
@@ -28,18 +29,18 @@ const P = {
 export function Icon({ name, size = 64, color = 'currentColor', stroke = 3.2 }) {
   return <svg viewBox="0 0 64 64" style={{ width: size, height: size }} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{P[name] || P.gift}</svg>;
 }
-export function Qr({ text, size = 140, dark = '#14181D', light = '#FFFFFF' }) {
+export function Qr({ text, size = 140, dark = THEME.colors.signalInk, light = '#FFFFFF' }) {
   const [svg, setSvg] = useState('');
   useEffect(() => { let on = true; QRCode.toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark, light } }).then((s) => on && setSvg(s)); return () => { on = false; }; }, [text, dark, light]);
   return <div style={{ width: size, height: size, lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: svg.replace('<svg', `<svg width="${size}" height="${size}"`) }} />;
 }
 /** Renders a creative template. Used for the passenger screen, previews and the creative library. */
 export function AdRender({ creative, lang = 'en', portrait = false, scale = 1, fluid = 0, footer, partner }) {
-  if (!creative) return <div style={{ background: '#14181D', color: '#FFC425', height: '100%', display: 'grid', placeItems: 'center', fontFamily: 'var(--cond)', fontSize: fluid ? `${28 * fluid}cqw` : 28 * scale, textAlign: 'center', padding: 20 }}>Your brand here · Meridian Airport Media</div>;
+  if (!creative) return <div data-no-i18n style={{ background: 'var(--signal-ink)', color: 'var(--signal)', height: '100%', display: 'grid', placeItems: 'center', fontFamily: 'var(--cond)', fontSize: fluid ? `${28 * fluid}cqw` : 28 * scale, textAlign: 'center', padding: 20 }}>Your brand here · {THEME.operator}</div>;
   const c = adCopy(creative, lang); const { bg, fg, accent } = creative.palette || {}; const split = creative.template === 'split'; const fl = creative.template === 'flight';
   const fs = (n) => (fluid ? `${n * fluid}cqw` : `${n * scale}px`);
   return (
-    <div style={{ background: bg, color: fg, height: '100%', width: '100%', display: 'grid', gridTemplateColumns: portrait ? '1fr' : split ? '1fr 1fr' : '1.1fr 1fr', gridTemplateRows: portrait ? '1.1fr 1fr' : '1fr', overflow: 'hidden', position: 'relative' }}>
+    <div data-no-i18n style={{ background: bg, color: fg, height: '100%', width: '100%', display: 'grid', gridTemplateColumns: portrait ? '1fr' : split ? '1fr 1fr' : '1.1fr 1fr', gridTemplateRows: portrait ? '1.1fr 1fr' : '1fr', overflow: 'hidden', position: 'relative' }}>
       <div style={{ display: 'grid', placeItems: 'center', background: split ? accent : 'transparent', position: 'relative' }}>
         {!split && <div style={{ position: 'absolute', width: portrait ? '58%' : '72%', aspectRatio: '1', maxHeight: '86%', borderRadius: '50%', background: accent, opacity: 0.16 }} />}
         <Icon name={creative.icon} size={fluid ? `${(portrait ? 150 : 190) * fluid}cqw` : (portrait ? 170 : 190) * scale} color={split ? bg : accent} stroke={2.6} />

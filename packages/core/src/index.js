@@ -16,3 +16,4 @@ export * as queries from './queries.js';
 export * from './creative/genai.js';
 export * from './util/time.js';
 export { openapi } from './api/openapi.js';
+export { validateCreative, contrast } from './creative/validate.js';

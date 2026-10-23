@@ -44,7 +44,7 @@ export function verifyProposal(proposal, ctx, rules) {
   return { ok: checks.every((c) => c.ok), checks };
 }
 
-/** Pluggable LLM ranker (server: ANTHROPIC_API_KEY; playground: claude.ai `sample` capability). Used on demand
+/** Pluggable LLM ranker (configured on the server with AI_PROVIDER). Used on demand
  *  ("Ask the AI agent to re-rank this slot"); its answer goes through verifyProposal like any other proposal. */
 export function llmPrompt(ctx) {
   return `You rank airport screen ads for the crowd in front of one screen. Use ONLY the evidence listed; cite evidence ids exactly.
@@ -58,10 +58,4 @@ Candidates: ${JSON.stringify(ctx.scored.map((s) => ({ campaignId: s.campaign.id,
 export function parseLlmRanking(text) {
   const m = String(text).replace(/```json|```/g, '').match(/\{[\s\S]*\}/); if (!m) throw new Error('No JSON in model answer');
   const j = JSON.parse(m[0]); return { ranking: (j.ranking || []).map((r) => ({ campaignId: String(r.campaignId), score: Number(r.score), cites: (r.cites || []).map(String), rationale: r.rationale || '' })) };
-}
-export async function anthropicRank(ctx, { apiKey, model = 'claude-sonnet-4-5' }) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model, max_tokens: 1200, messages: [{ role: 'user', content: llmPrompt(ctx) }] }) });
-  const j = await res.json(); if (!res.ok) throw new Error(j.error?.message || 'LLM error');
-  return { provider: `anthropic:${model}`, ...parseLlmRanking(j.content.map((c) => c.text || '').join('')) };
 }

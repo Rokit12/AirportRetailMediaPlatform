@@ -16,13 +16,14 @@ const cfg = { AODB_SOURCE: process.env.AODB_SOURCE || 'mock-csv', FLIGHT_SOURCE:
   AODB_VENDOR_URL: process.env.AODB_VENDOR_URL, AIDX_VENDOR_URL: process.env.AIDX_VENDOR_URL, ACRIS_BROKER_URL: process.env.ACRIS_BROKER_URL };
 
 const lanIp = () => Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal)?.address || 'localhost';
-const publicBaseUrl = process.env.PUBLIC_BASE_URL || (process.env.LAN_IP ? `http://${process.env.LAN_IP}:${process.env.WEB_PORT || PORT}` : '');
+// QR codes encode this base URL. Render injects RENDER_EXTERNAL_URL automatically, so the hosted playground needs no setup.
+const publicBaseUrl = (process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || (process.env.LAN_IP ? `http://${process.env.LAN_IP}:${process.env.WEB_PORT || PORT}` : '')).replace(/\/$/, '');
 
 const db = seed();
 const aodbRows = db.prepare('SELECT * FROM aodb_flights').all();
 const flightsTruth = parseAodbCsv([Object.keys(aodbRows[0]).join(','), ...aodbRows.map((r) => Object.values(r).map((v) => (/[,"]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v)).join(','))].join('\n'))
   .map((f, i) => ({ ...f, plannedGateCode: aodbRows[i].planned_gate || f.gateCode, plannedGate: aodbRows[i].planned_gate ? `${f.terminal}-${aodbRows[i].planned_gate}` : f.gate }));
-const layout = buildLayout(); layout.zones = all(db, 'zones'); layout.gates = all(db, 'gates');
+const layout = buildLayout(); layout.zones = all(db, 'zones'); layout.gates = all(db, 'gates'); { const ts = all(db, 'terminals'); if (ts.length) layout.terminals = ts; }
 const settingsRow = db.prepare("SELECT data FROM settings WHERE key='app'").get();
 const goodwillRows = all(db, 'goodwill');
 const persistMap = { campaign: 'campaigns', creative: 'creatives', promo_code: 'promo_codes', redemption: 'redemptions', incident: 'incidents', package: 'packages', goodwill: 'goodwill' };
@@ -41,11 +42,22 @@ const engine = new Engine({
 }, cfg);
 await engine.init(Date.parse(process.env.SIM_START || '') || START_TIME);
 
-// Pluggable LLM provider (default: none -> mock agent / template creatives work offline)
+// Pluggable LLM provider (default: mock -> offline agent and template creatives, no key needed).
+//   AI_PROVIDER=openai     any OpenAI-compatible chat-completions endpoint (OpenAI, Azure, Mistral, Ollama, vLLM, ...)
+//   AI_PROVIDER=anthropic  Anthropic Messages API
+// Common settings: LLM_API_KEY, LLM_MODEL, LLM_BASE_URL (optional override).
 const ctx = { aiProvider: 'mock' };
-if ((process.env.AI_PROVIDER || 'mock') === 'anthropic' && process.env.ANTHROPIC_API_KEY) {
-  const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5'; ctx.aiProvider = `anthropic:${model}`;
-  ctx.llm = async (prompt) => { const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model, max_tokens: 1200, messages: [{ role: 'user', content: prompt }] }) }); const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || 'LLM error'); return j.content.map((c) => c.text || '').join(''); };
+const provider = process.env.AI_PROVIDER || 'mock'; const key = process.env.LLM_API_KEY; const model = process.env.LLM_MODEL;
+if (provider !== 'mock' && key && model) {
+  ctx.aiProvider = `${provider}:${model}`;
+  const ask = async (url, init, pick) => { const r = await fetch(url, init); const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || `LLM HTTP ${r.status}`); return pick(j); };
+  if (provider === 'openai') {
+    const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+    ctx.llm = (prompt) => ask(`${base}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` }, body: JSON.stringify({ model, temperature: 0.2, messages: [{ role: 'user', content: prompt }] }) }, (j) => j.choices?.[0]?.message?.content || '');
+  } else if (provider === 'anthropic') {
+    const base = (process.env.LLM_BASE_URL || 'https://api.anthropic.com/v1').replace(/\/$/, '');
+    ctx.llm = (prompt) => ask(`${base}/messages`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model, max_tokens: 1200, messages: [{ role: 'user', content: prompt }] }) }, (j) => (j.content || []).map((c) => c.text || '').join(''));
+  } else console.warn(`[ai] unknown AI_PROVIDER "${provider}", using mock`);
 }
 
 const app = Fastify({ logger: false, bodyLimit: 2_000_000 });
@@ -67,6 +79,10 @@ app.get('/api/stream', (req, reply) => {
 });
 engine.on((type, payload) => { if (type === 'event') for (const c of clients) c.write(`event: note\ndata: ${JSON.stringify(payload)}\n\n`); if (type === 'rebuild' || type === 'tick') dirty = true; });
 let dirty = true, lastSent = 0;
+// Impression entity: flush changed rows to SQLite every 5 s (and fully after a rebuild).
+const flushImpressions = () => { const rows = engine.takeDirtyImpressions(); if (!rows.length) return; db.exec('BEGIN'); try { for (const r of rows) put.impressions(db, r); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); console.error('[impressions]', e.message); } };
+engine.on((type) => { if (type === 'rebuild') { db.prepare('DELETE FROM impressions WHERE date = ?').run(new Date(engine.dayStart).toISOString().slice(0, 10)); } });
+flushImpressions(); setInterval(flushImpressions, 5000);
 setInterval(() => { engine.tick(250); }, 250);
 setInterval(() => { if (!clients.size) return; const now = Date.now(); if (!dirty && !engine.playing && now - lastSent < 5000) return; dirty = false; lastSent = now; const msg = `event: live\ndata: ${JSON.stringify(queries.live(engine))}\n\n`; for (const c of clients) c.write(msg); }, 300);
 

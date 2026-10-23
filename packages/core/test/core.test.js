@@ -50,3 +50,19 @@ test('promo code: expiry tied to boarding close, redemption counted, family shar
   const before = e.cnt.camp.get(p.campaignId).liveRed; assert.equal(e.redeem(p.code).ok, true); assert.equal(e.cnt.camp.get(p.campaignId).liveRed, before + 1);
   assert.equal(e.redeem(p.code).ok, false); const fam = e.shareCode(p.code); assert.equal(fam.parent, p.code);
 });
+
+test('failed creative: blocked, incident raised, campaign falls back; repair restores', async () => {
+  const e = new Engine(buildData({ sampleCsv: sample })); await e.init(); e.injectDelay('100902', 45);
+  const first = e.screenState.get('T2-G42-01').now.creativeId; e.injectCreativeFailure(first);
+  assert.notEqual(e.screenState.get('T2-G42-01').now.creativeId, first);
+  assert.ok(e.incidents.some((i) => i.area === 'Creatives' && i.status === 'open' && i.creativeId === first));
+  e.repairCreative(first); assert.ok(!e.incidents.some((i) => i.area === 'Creatives' && i.creativeId === first && i.status === 'open'));
+});
+test('Impression records aggregate per campaign x screen x hour; GateAssignment reflects AIDX gate change', async () => {
+  const e = new Engine(buildData({ sampleCsv: sample })); await e.init();
+  const rows = e.impressionRows({ campaign: 'CMP-PERF15' }); assert.ok(rows.length > 10);
+  for (const r of rows) assert.ok(r.screenId && r.hour >= 0 && r.hour < 24 && r.impressions >= 0);
+  const { queries } = await import('../src/index.js');
+  e.injectGateChange('100902', '44'); const ga = queries.gateAssignments(e, { flight: 'XY501' })[0];
+  assert.equal(ga.gate, '44'); assert.equal(ga.plannedGate, '42'); assert.equal(ga.changed, true);
+});

@@ -1,15 +1,17 @@
-// REST API route table. The Node server mounts these on Fastify; the hosted playground dispatches the same
+// REST API route table. The Node server mounts these on Fastify; the static demo build dispatches the same
 // table in-browser. Handler signature: (engine, { params, query, body, ctx }) => JSON.
 import * as Q from '../queries.js';
 import { mockCreative, creativePrompt, mergeLlmCreative } from '../creative/genai.js';
 import { llmPrompt, parseLlmRanking, verifyProposal } from '../decision/ai.js';
 import { audienceMatch } from '../decision/score.js';
+import { validateCreative } from '../creative/validate.js';
 import { AIRPORT, AIRLINES, SEGMENTS, CATEGORIES, REGIONS, SEGMENT_MODEL_VERSION, AGE_LABEL } from '../reference.js';
 import { MIN, iso } from '../util/time.js';
 
 const bad = (msg, status = 400) => Object.assign(new Error(msg), { status });
 const need = (o, keys) => { for (const k of keys) if (o?.[k] == null || o[k] === '') throw bad(`Field "${k}" is required`); };
 const MASTER = {
+  terminals: { get: (e) => e.layout.terminals, required: ['id', 'name', 'role'] },
   advertisers: { get: (e) => e.advertisers, required: ['name', 'type'], prefix: 'ADV' },
   outlets: { get: (e) => e.outlets, required: ['name', 'advertiserId', 'zone'], prefix: 'OUT' },
   airlines: { get: (e) => e.airlines, required: ['iata', 'name'], key: 'iata' },
@@ -22,6 +24,21 @@ function upsertMaster(e, type, id, body) {
   need(body, m.required); const key = m.key || 'id'; const list = m.get(e);
   let rec = id ? list.find((x) => x[key] === id) : null;
   if (id && !rec) throw bad('Not found', 404);
+  if ((type === 'zones' || type === 'gates') && !e.layout.terminals.some((x) => x.id === body.terminal)) throw bad('Unknown terminal ' + body.terminal);
+  if (type === 'gates' && !e.layout.zones.some((x) => x.id === body.zone)) throw bad('Unknown zone ' + body.zone);
+  if (type === 'terminals') {
+    if (rec) { rec.name = body.name; rec.role = body.role; e.persist('master', { type, record: rec }); return rec; }
+    if (e.layout.terminals.some((x) => x.id === body.id)) throw bad(`Terminal ${body.id} already exists`);
+    const k = e.layout.terminals.length - 2; // T1/T2 sit side by side; new terminals stack below
+    const box = { x: 60, y: 540 + Math.max(0, k) * 140, w: 1080, h: 100 };
+    const term = { id: String(body.id).toUpperCase(), name: body.name, role: body.role, box };
+    e.layout.terminals.push(term);
+    const zs = [['LAND', 'Check-in hall', 'landside', 0.2, 0.75, false], ['SEC', 'Security', 'checkpoint', 0.5, 0.55, false], ['PLAZA', 'Departures plaza', 'plaza', 0.5, 0.25, true], ['ARR', 'Arrivals hall', 'arrivals', 0.85, 0.75, false]]
+      .map(([sfx, nm, kind, fx, fy, airside]) => ({ id: `${term.id}-${sfx}`, terminal: term.id, name: `${term.id} ${nm}`, kind, x: box.x + box.w * fx, y: box.y + box.h * fy, airside }));
+    e.layout.zones.push(...zs);
+    e.persist('master', { type, record: term }); for (const z of zs) e.persist('master', { type: 'zones', record: z });
+    e.note('master', `Terminal ${term.id} onboarded with ${zs.length} zones`); return term;
+  }
   if (type === 'screens') {
     const z = e.layout.zones.find((x) => x.id === body.zone); if (!z) throw bad('Unknown zone ' + body.zone);
     const gates = String(body.nearestGatesText ?? (rec?.nearestGates || []).map((g) => g.gate.split('-')[1]).join(',')).split(',').map((g) => g.trim()).filter(Boolean).map((g) => `${z.terminal}-${g}`);
@@ -31,6 +48,8 @@ function upsertMaster(e, type, id, body) {
     e.screens.set(s.id, s); if (!e.screenState.has(s.id)) e.screenState.set(s.id, { status: 'online', latencyMs: 80, now: null, last: null, streak: { campaignId: null, n: 0 }, hourCounts: new Map(), hourKey: -1, heartbeat: e.t });
     e.persist('master', { type, record: s }); e.runSlot(e.t, false, [s], 'replan'); return s;
   }
+  if (type === 'zones' && !rec) { const tb = e.layout.terminals.find((x) => x.id === body.terminal).box; body = { x: tb.x + tb.w / 2, y: tb.y + tb.h / 2, airside: body.kind !== 'landside' && body.kind !== 'arrivals', ...body }; }
+  if (type === 'gates' && !rec) { const z = e.layout.zones.find((x) => x.id === body.zone); body = { x: z.x, y: z.y, ...body }; }
   if (rec) Object.assign(rec, body); else { rec = { ...body }; if (!rec[key]) rec[key] = `${m.prefix || type.toUpperCase().slice(0, 3)}-${Date.now().toString(36).toUpperCase()}`; if (type === 'gates') rec.id = `${rec.terminal}-${rec.code}`; list.push(rec); }
   if (type === 'gates' && !e.gatesByZone.get(rec.zone)?.includes(rec.id)) { if (!e.gatesByZone.has(rec.zone)) e.gatesByZone.set(rec.zone, []); e.gatesByZone.get(rec.zone).push(rec.id); }
   e.persist('master', { type, record: rec }); return rec;
@@ -60,7 +79,7 @@ export const routes = [
     const { action, value } = body || {};
     if (action === 'play') e.setPlaying(true); else if (action === 'pause') e.setPlaying(false); else if (action === 'speed') e.setSpeed(value);
     else if (action === 'jump') { const [h, m] = String(value).split(':').map(Number); if (Number.isNaN(h)) throw bad('value must be HH:MM'); e.jump(e.dayStart + (h * 60 + (m || 0)) * MIN); }
-    else if (action === 'reset') { e.injected = []; e.adapters.flights.overrides = []; e.agent.hallucinate.clear(); e.pins.clear(); e.jump(e.dayStart + (14 * 60 + 2) * MIN); e.setPlaying(true); }
+    else if (action === 'reset') { e.injected = []; e.adapters.flights.overrides = []; e.agent.hallucinate.clear(); e.pins.clear(); for (const cr of e.creatives) delete cr.broken; e.jump(e.dayStart + (14 * 60 + 2) * MIN); e.setPlaying(true); }
     else throw bad('Unknown action'); return Q.live(e);
   }],
   ['POST', '/api/sim/inject', 'Inject an event: delay | gate-change | screen-offline | feed-lag | ai-hallucination | ai-clear', 'Simulation', (e, { body }) => {
@@ -70,6 +89,7 @@ export const routes = [
     if (b.type === 'screen-offline') { e.injectScreenOffline(b.screenId, Number(b.minutes || 12)); return { ok: true }; }
     if (b.type === 'feed-lag') { e.injectFeedLag(Number(b.minutes || 8)); return { ok: true }; }
     if (b.type === 'ai-hallucination') { e.injectHallucination(b.screenId || '*', true); return { ok: true }; }
+    if (b.type === 'creative-fail') return e.injectCreativeFailure(b.creativeId || e.screenState.get(b.screenId || 'T2-G42-01')?.now?.creativeId);
     if (b.type === 'ai-clear') { e.injectHallucination(b.screenId || '*', false); e.agent.hallucinate.clear(); return { ok: true }; }
     throw bad('Unknown inject type');
   }],
@@ -79,6 +99,9 @@ export const routes = [
   ['GET', '/api/feeds/acris/entities', 'ACRIS NGSI-LD entities (terminals, concourses, checkpoints)', 'Feeds', (e) => e.adapters.acris.entities?.() || []],
   ['GET', '/api/flights', 'Flights (canonical model)', 'Flights', (e, { query }) => e.flightArr.filter((f) => (!query.airline || f.airline === query.airline) && (!query.direction || f.direction === query.direction) && (!query.q || `${f.flightNo} ${f.destination} ${f.origin} ${f.gateCode}`.toLowerCase().includes(String(query.q).toLowerCase()))).slice(0, Number(query.limit || 2000)).map(({ profile, ...f }) => f)],
   ['GET', '/api/flights/:id', 'One flight with its aggregated crowd profile', 'Flights', (e, { params }) => { const f = e.flights.get(params.id); if (!f) throw bad('Not found', 404); return f; }],
+  ['GET', '/api/gate-assignments', 'GateAssignment entities (planned vs actual gate, occupancy window)', 'Flights', (e, { query }) => Q.gateAssignments(e, query)],
+  ['GET', '/api/aircraft-types', 'AircraftType entities with seat configuration and usage today', 'Flights', (e) => Q.aircraftTypes(e)],
+  ['GET', '/api/impressions', 'Impression records: aggregated per campaign x screen x hour (never per person)', 'Campaigns', (e, { query }) => e.impressionRows(query).slice(0, Number(query.limit || 500))],
   ['GET', '/api/screens', 'All screens with status and what is playing', 'Screens', (e) => Q.screenList(e)],
   ['GET', '/api/screens/:id/now', 'Player payload: creative, promo code, FIDS strip, decision', 'Screens', (e, { params }) => { const r = Q.screenNow(e, params.id); if (!r) throw bad('Not found', 404); return r; }],
   ['GET', '/api/presence/zones', 'Passenger presence per zone now', 'Presence', (e) => ({ zones: Q.zonePresenceNow(e), gates: Q.gatePresenceNow(e) })],
@@ -90,7 +113,7 @@ export const routes = [
     const d = e.lastDecision.get(s.id); const profile = e.screenProfile(s, e.t); const env = e.env(e.t);
     const scored = d.candidates.filter((c) => c.final != null && !c.filtered).map((c) => ({ campaign: e.campaign(c.campaignId), match: c.match, boost: c.boost, perf: c.perf, pacing: c.pacing, final: c.final }));
     const vctx = { screen: s, profile, scored, evidence: d.evidence, feedAge: env.feedAge, rules: e.settings.rules };
-    if (!ctx?.llm) return { provider: 'none', note: 'No LLM provider configured (set AI_PROVIDER=anthropic and ANTHROPIC_API_KEY). The mock agent result is in the decision.', verdict: d.ai };
+    if (!ctx?.llm) return { provider: 'none', note: 'No LLM provider configured (set AI_PROVIDER, LLM_API_KEY and LLM_MODEL; see README). The mock agent result is in the decision.', verdict: d.ai };
     const text = await ctx.llm(llmPrompt(vctx)); const proposal = parseLlmRanking(text);
     const verdict = verifyProposal(proposal, vctx, e.settings.rules);
     return { provider: ctx.aiProvider, proposal, verdict, executed: verdict.ok ? proposal.ranking[0]?.campaignId : null, fallback: verdict.ok ? null : 'Rejected: screen keeps the rule-based decision' };
@@ -116,7 +139,14 @@ export const routes = [
   ['POST', '/api/campaigns/recommend', 'Best 3 slots tomorrow for a campaign', 'Campaigns', (e, { body }) => Q.recommendSlots(e, body.id ? e.campaign(body.id) : body)],
   ['GET', '/api/campaigns/:id/segments', 'Performance by segment + suggested weight changes', 'Campaigns', (e, { params }) => Q.segmentPerformance(e, params.id)],
   ['GET', '/api/campaigns/:id/ab', 'A/B creative comparison', 'Campaigns', (e, { params }) => Q.abCompare(e, params.id)],
-  ['GET', '/api/creatives', 'Creative library', 'Creatives', (e, { query }) => e.creatives.filter((c) => !query.advertiser || c.advertiserId === query.advertiser)],
+  ['GET', '/api/creatives', 'Creative library (with validation result)', 'Creatives', (e, { query }) => e.creatives.filter((c) => (!query.advertiser || c.advertiserId === query.advertiser) && (!query.status || c.status === query.status)).map((c) => ({ ...c, problems: validateCreative(c) }))],
+  ['PUT', '/api/creatives/:id', 'Update / re-upload a creative (clears a failed asset)', 'Creatives', (e, { params, body }) => { const cr = e.creatives.find((x) => x.id === params.id); if (!cr) throw bad('Not found', 404); const { id, status, ...patch } = body || {}; return e.repairCreative(params.id, patch); }],
+  ['POST', '/api/creatives/:id/approve', 'Approve or reject a creative with the brand-safety checklist', 'Creatives', (e, { params, body }) => {
+    const cr = e.creatives.find((x) => x.id === params.id); if (!cr) throw bad('Not found', 404); const ok = body?.decision === 'approve';
+    if (ok) { const probs = validateCreative(cr); if (probs.length) throw bad('Cannot approve: ' + probs.join('; ')); if (Object.values(body.checklist || {}).some((v) => !v)) throw bad('All checklist items must pass to approve'); }
+    cr.status = ok ? 'approved' : 'rejected'; cr.review = { by: 'Media desk', at: iso(e.t), checklist: body?.checklist || {}, note: body?.note || '' };
+    e.persist('creative', cr); e.note('approval', `Creative “${cr.name}” ${ok ? 'approved' : 'rejected'}`, { advertiserId: cr.advertiserId }); e.runSlot(e.t); return cr;
+  }],
   ['POST', '/api/creatives', 'Upload / save creative', 'Creatives', (e, { body }) => { need(body, ['advertiserId', 'name', 'copy']); const c = { id: `CR-${Date.now().toString(36).toUpperCase()}`, status: 'pending', createdAt: iso(e.t), template: 'offer', icon: 'gift', palette: { bg: '#F4F7FB', fg: '#0F172A', accent: '#2563EB' }, source: 'upload', ...body }; e.creatives.push(c); e.persist('creative', c); return c; }],
   ['POST', '/api/creatives/generate', 'GenAI creative assistant (mock offline; LLM if configured)', 'Creatives', async (e, { body, ctx }) => { need(body, ['brief']); const base = mockCreative(body.brief); if (ctx?.llm && body.useLlm !== false) { try { return mergeLlmCreative(base, await ctx.llm(creativePrompt(body.brief))); } catch (err) { return { ...base, llmError: err.message }; } } return base; }],
   ['GET', '/api/promo-codes', 'Issued promo codes', 'Promo', (e, { query }) => [...e.promoCodes.values()].filter((p) => !query.advertiser || p.advertiserId === query.advertiser).slice(-200).reverse()],
@@ -127,7 +157,7 @@ export const routes = [
   ['GET', '/api/retailer/:adv/history', 'Campaign history with ROI', 'Retailer', (e, { params }) => Q.campaignHistory(e, params.adv)],
   ['GET', '/api/media/inventory', 'Inventory calendar: screens x hours', 'Media', (e, { query }) => Q.inventory(e, { zone: query.zone, day: Number(query.day || 0) })],
   ['GET', '/api/media/yield', 'Yield, pricing, 7-day occupancy and revenue forecast', 'Media', (e) => Q.yieldForecast(e)],
-  ['GET', '/api/media/approvals', 'Approval queue', 'Media', (e) => ({ campaigns: e.campaigns.filter((c) => c.approval?.state === 'pending').map((c) => Q.campaignView(e, c)), creatives: e.creatives.filter((c) => c.status === 'pending') })],
+  ['GET', '/api/media/approvals', 'Approval queue: campaigns and stand-alone creatives', 'Media', (e) => { const pc = e.campaigns.filter((c) => c.approval?.state === 'pending'); const inCamp = new Set(pc.flatMap((c) => c.creativeIds || [])); return { campaigns: pc.map((c) => Q.campaignView(e, c)), creatives: e.creatives.filter((c) => c.status === 'pending' && !inCamp.has(c.id)).map((c) => ({ ...c, advertiser: e.advertiserName(c.advertiserId), problems: validateCreative(c), usedBy: e.campaigns.filter((k) => (k.creativeIds || []).includes(c.id)).map((k) => k.name) })) }; }],
   ['GET', '/api/media/advertisers', 'Advertiser overview with under-delivery flags', 'Media', (e) => Q.advertiserOverview(e)],
   ['GET', '/api/media/heatmap', 'Segment x hour heatmap for a zone', 'Media', (e, { query }) => Q.segmentHeatmap(e, query.zone || 'T2-PLAZA')],
   ['GET', '/api/media/conflict', 'Why campaign A beat campaign B on a screen', 'Media', (e, { query }) => Q.conflict(e, query.screen, query.a, query.b)],
@@ -154,7 +184,7 @@ export const routes = [
   ['GET', '/api/airline/:code/performance', 'Impressions and redemptions for my campaigns', 'Airline', (e, { params }) => Q.airlinePerformance(e, params.code)],
 ];
 
-/** Tiny matcher shared by the playground transport. */
+/** Tiny matcher shared by the static demo transport. */
 export function matchRoute(method, url) {
   const [path, qs] = url.split('?'); const query = Object.fromEntries(new URLSearchParams(qs || ''));
   for (const r of routes) {

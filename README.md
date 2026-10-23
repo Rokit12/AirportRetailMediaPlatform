@@ -10,11 +10,11 @@ airports, airlines or brands, and no per-passenger data anywhere in the system.
 
 | | |
 |---|---|
-| **Hosted playground** | https://claude.ai/artifact/DmrpWyhUXRzKvatrJLzbbR (pre-configured; runs the full engine in the page) |
+| **Hosted playground** | https://airportretailmediaplatform.onrender.com/ (full client–server build, pre-configured; phones can scan the QR codes) |
 | **Local, one command** | `docker compose up` → http://localhost:8080 |
 | **Without Docker** | `npm install && npm start` → http://localhost:8080 (Node 22.5+) |
 | **API spec** | `docs/openapi.json` or `GET /api/openapi.json` |
-| **Tests** | `npm test` (adapters against the attached samples, worked example, cause-and-effect, promo codes) |
+| **Tests** | `npm test` (adapters against the attached samples, worked example, cause-and-effect, promo codes, failed creatives, Impression and GateAssignment entities) |
 
 ---
 
@@ -48,13 +48,13 @@ There is no login. Use the role switcher in the header. The Retailer and Airline
 
 | Role | Pages | Highlights |
 |---|---|---|
-| **Platform Admin** (dark control-room theme) | Overview · Decision engine · Master data · Incidents · Data feeds | Live SVG network map of T1/T2 with every screen coloured online/degraded/offline and a passenger heat overlay. KPI strip (screens online %, plays, impressions, revenue in configurable currency, active campaigns, latency). Auto-raised incidents (screen offline > 5 min, feed lag, AI rejection) with owner and status. Full CRUD for vendors, outlets, airlines, zones, gates and screens. Rule-engine settings and a searchable decision log with evidence drawer. Feed health, raw message stream, and a box to paste any AIDX XML through the adapter. API p95, playlist build time, 7-day uptime. |
-| **Retailer** | Dashboard · Campaigns · Creatives · Promo codes · History | Live impressions, scans, redemptions, conversion and revenue. Passenger flow near the store for the next 2 h ("Next 60 min: 2,692 pax, 67% international, top: ZHQ, LMW, SMG"). Campaign builder with live audience-match preview ("Matches 64% of the crowd at … expected 3,100 impressions and 95 redemptions"), mock-screen preview, trigger rules, schedule, budget and "best 3 slots tomorrow". Performance by segment ("Families redeemed 3.2x their share") with one-click weight suggestions. A/B creatives, budget pacing, out-of-stock toggle (pauses the promo network-wide). GenAI creative assistant in EN + Kiswahili. Time-boxed codes, history with ROI and "run again". |
-| **Media Manager** | Inventory · Approvals · Advertisers · Matching · Packages | Screen × hour calendar (available / partly booked / premium / sold) with a suggested price per cell driven by predicted presence. 7-day occupancy and revenue forecast, plus a price book. Approval queue with brand-safety checklist. Top advertisers, under-delivery flags, one-click printable/shareable report. Segment × hour heatmap per zone, an A-vs-B conflict explainer, manual pin/override with a logged reason, and a package builder. |
+| **Platform Admin** (dark control-room theme) | Overview · Decision engine · Master data · Incidents · Data feeds | Live SVG network map of T1/T2 with every screen coloured online/degraded/offline and a passenger heat overlay. KPI strip (screens online %, plays, impressions, revenue in configurable currency, active campaigns, latency). Auto-raised incidents (screen offline > 5 min, feed lag, failed creative, AI rejection) with severity, owner and status. Full create/edit for terminals, vendors, outlets, airlines, zones, gates and screens; a new terminal is onboarded with its zones and appears on the map. Read-only views of gate assignments and aircraft types. Rule-engine settings and a searchable decision log with evidence drawer. Feed health, raw message stream, and a box to paste any AIDX XML through the adapter. API p95, playlist build time, 7-day uptime. |
+| **Retailer** | Dashboard · Campaigns · Creatives · Promo codes · History | Live impressions, scans, redemptions, conversion and revenue. Passenger flow near the store for the next 2 h ("Next 60 min: 2,692 pax, 67% international, top: ZHQ, LMW, SMG"). Campaign builder with live audience-match preview ("Matches 64% of the crowd at … expected 3,100 impressions and 95 redemptions"), mock-screen preview, trigger rules, schedule, budget and "best 3 slots tomorrow". Performance by segment ("Families redeemed 3.2x their share") with one-click weight suggestions. Impression log per screen and hour. A/B creatives, budget pacing, out-of-stock toggle (pauses the promo network-wide). GenAI creative assistant in EN + Kiswahili. A creative that fails on screens is flagged in the library with a one-click re-upload. Time-boxed codes, history with ROI and "run again". |
+| **Media Manager** | Inventory · Approvals · Advertisers · Matching · Packages | Screen × hour calendar (available / partly booked / premium / sold) with a suggested price per cell driven by predicted presence. 7-day occupancy and revenue forecast, plus a price book. Approval queue for campaigns and stand-alone creatives, with automatic creative checks (template, both languages, contrast, asset loads) and a brand-safety checklist. Top advertisers, under-delivery flags, one-click printable/shareable report. Segment × hour heatmap per zone, an A-vs-B conflict explainer, manual pin/override with a logged reason, and a package builder. |
 | **Airline Rep** | My flights · Gate messaging · Delay goodwill · Partners | Departures list and day timeline (delays in amber), aggregated crowd profile of their passengers. Sponsored content restricted to their own boarding window. "What played at my gates and why". Delay goodwill automation: past a threshold, a meal voucher co-funded with an F&B partner is auto-pushed to that gate with airline priority. Co-marketing marketplace ranked by fit, accepted in one click. Performance. |
 | **Passenger** | Screen simulator | Any of the 182 screens in 16:9 or 9:16. FIDS strip of nearby departures, bilingual rotation, QR with a live countdown that expires when the linked flight closes boarding, and the "Why this ad?" overlay. |
 
-The **simulation bar** is visible to all roles: play/pause, 1x/10x/60x, jump to time, "inject event" (delay, gate change, screen offline, feed lag, AI hallucination), worked example, and reset.
+The **simulation bar** is visible to all roles: play/pause, 1x/10x/60x, jump to time, "inject event" (delay, gate change, screen offline, feed lag, failed creative, AI hallucination), worked example, and reset.
 
 ## 3. Architecture
 
@@ -93,7 +93,8 @@ The core is plain ES modules with no dependencies, so **the identical engine, ad
 | AODB flight movements | 33-column CSV, identical to the attached sample. The generator keeps the 320 sample legs and adds ~580 more to reach 900. | `aodb.js` — `MockAodbSource`, `VendorApiAodbSource` | `Flight` |
 | IATA AIDX | `IATA_AIDX_FlightLegNotifRQ` XML. The day is replayed as messages on the sim clock; injected events use the same XML path. The attached XH960 sample parses unchanged. | `aidx.js` — `MockAidxFeed`, `VendorAidxFeed` | `FlightEvent` |
 | ACI ACRIS (FIWARE) | NGSI-LD normalized entities (`TerminalFacility`, `ConcourseFacility`, `CheckpointFacility`, `QueueMeasurement`). Official examples are in `data/samples/acris/`. | `acris.js` — `MockAcrisFeed`, `OrionLdAcrisFeed` | `Terminal`, `Zone`, `Checkpoint`, `QueueMeasurement` |
-| Platform-owned | SQLite tables (`apps/server/migrations/001_init.sql`) | — | `Screen`, `Advertiser`, `Outlet`, `Campaign`, `Creative`, `PromoCode`, `Redemption`, `Incident` |
+| Platform-owned | SQLite tables (`apps/server/migrations/`) | — | `Terminal`, `Screen`, `Advertiser`, `Outlet`, `Campaign`, `Creative`, `PromoCode`, `Impression`, `Redemption`, `Incident` |
+| Derived | — | — | `GateAssignment` (planned vs actual gate, occupancy window; `GET /api/gate-assignments`), `AircraftType` (seat configuration; `GET /api/aircraft-types`) |
 
 Each source is switched with **one config value**: `AODB_SOURCE=mock-csv|vendor-api`, `FLIGHT_SOURCE=mock-aidx|vendor-api`, `ACRIS_SOURCE=mock-ngsi-ld|orion-ld`. Going live means writing one adapter class and nothing else; the step-by-step is in [`docs/adapters.md`](docs/adapters.md).
 
@@ -126,21 +127,24 @@ Each source is switched with **one config value**: `AODB_SOURCE=mock-csv|vendor-
 | `CURRENCY`, `CURRENCY_SYMBOL` | USD, $ | Revenue currency. Also editable in Admin → Decision engine. |
 | `AODB_SOURCE`, `FLIGHT_SOURCE`, `ACRIS_SOURCE` | mocks | Adapter selection. |
 | `AODB_VENDOR_URL`, `AIDX_VENDOR_URL`, `ACRIS_BROKER_URL` | — | Live endpoints for the stub adapters. |
-| `AI_PROVIDER`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | mock | Real LLM for creative copy and "re-rank this slot". The demo needs no key. |
+| `AI_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL` | mock | Optional real LLM for creative copy and "re-rank this slot": `openai` (any OpenAI-compatible endpoint, including a local Ollama or vLLM) or `anthropic`. The demo needs no key. |
 | `DB_PATH` | `data/gateline.db` | SQLite file. |
 | `SIM_START` | 2026-10-14T14:02Z | Simulation start time. |
 
-**White-label.** `apps/web/src/theme.config.js` holds the product name, mark, colours, second language (Kiswahili by default) and currency. UI strings live in `apps/web/src/i18n.js`. To add another language, add a dictionary there and add copy keys to the creatives.
+**White-label.** `apps/web/src/theme.config.js` is the single place for the product name, operator name, airport display name, logo (inline SVG or image URL), colours, second language and currency. At boot it is pushed into CSS variables, the favicon and the page title, so changing it re-brands the header, buttons, map heat, passenger screens, claim page and reports.
+
+**Languages.** Every UI label, status and engine-generated sentence (decision rules, filter reasons, alerts, feed events) is available in the second language; switch with EN / SW in the header. Strings live in `apps/web/src/i18n.js` (a dictionary plus patterns that keep data values such as flight numbers intact). Ad creatives and the passenger claim page carry their own per-language copy. Advertiser-entered data (campaign and screen names) is shown as entered. To add a language, add a dictionary there and set `THEME.secondLanguage`.
 
 ## 7. Deploying a public playground
 
-The hosted playground link above runs the whole engine in the browser. To host the full client–server build instead:
+The hosted playground runs on Render from this repository (`render.yaml`, Docker). Every push to the default branch redeploys it, and the service seeds itself on boot. Render provides `RENDER_EXTERNAL_URL`, which the server uses for QR codes, so phones open the claim page with no extra configuration. On Render's free plan the service sleeps after 15 minutes without traffic, so open the URL a minute before a demo.
 
-- **Render.** New → Blueprint → this repo. `render.yaml` is included; set `PUBLIC_BASE_URL` to the service URL.
+Other options:
+
+- **Render (new service).** New → Blueprint → this repo.
 - **Fly.io.** `fly launch --copy-config --no-deploy && fly deploy` (uses `fly.toml`).
 - **Any container host.** `docker build -t gateline . && docker run -p 8080:8080 -e PUBLIC_BASE_URL=https://your.host gateline`.
-
-The service seeds itself on first boot. No external services are required.
+- **Static hosting (no backend).** `npm run build:static` produces one self-contained HTML file in `apps/web/dist-static/` that runs the whole engine in the browser. QR claims then only work on the same device.
 
 ## 8. Project layout
 
@@ -157,5 +161,3 @@ docs/                architecture, adapter guide, demo script, openapi.json
 - **Simulated audiences.** Impressions and baseline scans are simulated from presence × screen visibility. Real phone redemptions are recorded individually and flagged `live`.
 - **Simulated clock.** The simulation runs over one operating day (14 Oct 2026, the sample date). Jumping rebuilds the day up to the target time in about 1 second.
 - **LLM ranking on demand only.** The LLM ranker runs on demand ("re-rank this slot") rather than for every slot of every screen; the per-slot agent is the deterministic mock. Both paths go through the same verifier.
-- **Playground QR claims.** In the hosted playground, a phone can record a claim only if it is signed in to claude.ai with access to the artifact. The claim is relayed to the presenting session through the artifact's database. Clicking the QR always opens the claim page in-app.
-# AirportRetailMediaPlatform

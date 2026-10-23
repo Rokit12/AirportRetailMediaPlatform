@@ -2,7 +2,7 @@
    condensed numerals like a departures board, pictogram-led labels. Dark control room for operators,
    light daylight theme for business roles. */
 :root {
-  --signal: #FFC425; --signal-ink: #14181D; --data: #0F766E; --ok: #2E9E5B; --warn: #D99A00; --bad: #D64545; --info: #2F6FD6;
+  --signal: #FFC425; --signal-ink: #14181D; --data: var(--brand-data-light, #0F766E); --ok: #2E9E5B; --warn: #D99A00; --bad: #D64545; --info: #2F6FD6;
   --font: 'Barlow', 'Segoe UI', system-ui, sans-serif; --cond: 'Barlow Condensed', 'Arial Narrow', 'Barlow', sans-serif;
   --r-s: 4px; --r-m: 8px;
   color-scheme: light;
@@ -12,7 +12,7 @@
 [data-theme='control'] {
   color-scheme: dark;
   --bg: #0B1116; --surface: #121B22; --surface-2: #17222B; --line: #22313C; --line-2: #2E3F4C; --text: #E4EAEE; --muted: #93A2AD; --faint: #66757F;
-  --data: #2CC2AE; --info: #6AA7FF; --shadow: none;
+  --data: var(--brand-data-dark, #2CC2AE); --info: #6AA7FF; --shadow: none;
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
@@ -29,7 +29,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .app { display: grid; grid-template-rows: auto auto 1fr; height: 100%; }
 .hdr { display: flex; align-items: center; gap: 18px; padding: 0 18px; height: 54px; background: var(--nav-bg); color: var(--nav-text); padding-top: env(safe-area-inset-top, 0px); }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: .01em; white-space: nowrap; }
-.brand .mark { width: 28px; height: 28px; border-radius: 5px; background: var(--signal); display: grid; place-items: center; }
 .brand small { font-weight: 500; color: #9AA6AE; font-size: 12.5px; }
 .roles { display: flex; gap: 2px; height: 100%; }
 .roles button { white-space: nowrap; background: none; border: 0; color: #B9C3C9; padding: 0 10px; height: 100%; cursor: pointer; display: flex; gap: 8px; align-items: center; border-bottom: 3px solid transparent; font-weight: 600; }
@@ -133,11 +132,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .modal-wrap { position: fixed; inset: 0; background: rgba(10,14,18,.45); z-index: 50; display: grid; place-items: center; padding: 20px; }
 .modal { background: var(--surface); border-radius: var(--r-m); width: min(720px, 96vw); max-height: 90vh; overflow: auto; border: 1px solid var(--line); }
 .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
-.toast { background: #14181D; color: #EEF2F4; border-radius: var(--r-m); padding: 10px 12px; border-left: 4px solid var(--signal); font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.25); animation: tin .25s ease-out; }
+.toast { background: var(--signal-ink); color: #EEF2F4; border-radius: var(--r-m); padding: 10px 12px; border-left: 4px solid var(--signal); font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.25); animation: tin .25s ease-out; }
 .toast.redemption { border-left-color: #3DD68C; } .toast.incident { border-left-color: var(--bad); } .toast.goodwill { border-left-color: #6AD1C6; }
 @keyframes tin { from { transform: translateY(8px); opacity: 0; } }
 .empty { padding: 24px; text-align: center; color: var(--muted); }
-.loading { display: grid; place-items: center; height: 100%; background: #14181D; color: #E9ECEE; }
+.loading { display: grid; place-items: center; height: 100%; background: var(--nav-bg); color: #E9ECEE; }
 .callout { border: 1px dashed var(--line-2); border-radius: var(--r-m); padding: 10px 12px; background: var(--surface-2); }
 .sentence { font-size: 15px; line-height: 1.5; }
 .sentence b { font-family: var(--cond); font-size: 18px; }

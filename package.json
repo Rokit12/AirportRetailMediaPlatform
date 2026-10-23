@@ -2,17 +2,22 @@
   "name": "gateline",
   "private": true,
   "version": "1.0.0",
-  "description": "Gateline — airport retail media platform POC (Meridian International, MQI)",
+  "description": "Gateline \u2014 airport retail media platform POC (Meridian International, MQI)",
   "type": "module",
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "dev": "npm run seed -w @gateline/server && concurrently -k -n api,web \"npm run dev -w @gateline/server\" \"npm run dev -w @gateline/web\"",
     "seed": "npm run seed -w @gateline/server",
     "build": "npm run build -w @gateline/web",
-    "build:playground": "npm run build:playground -w @gateline/web",
     "start": "npm run build && npm run start -w @gateline/server",
     "test": "node --test packages/core/test/core.test.js",
-    "openapi": "node packages/core/scripts/openapi.js > docs/openapi.json"
+    "openapi": "node packages/core/scripts/openapi.js > docs/openapi.json",
+    "build:static": "npm run build:static -w @gateline/web"
   },
-  "engines": { "node": ">=22.5" }
+  "engines": {
+    "node": ">=22.5"
+  }
 }

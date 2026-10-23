@@ -34,6 +34,19 @@
  * @property {string} source             'AODB' | 'AIDX'
  * @property {CrowdProfile} profile      aggregated, never per passenger
  *
+ * @typedef {Object} GateAssignment     Derived from AODB gate + AIDX gate changes (GET /api/gate-assignments)
+ * @property {string} id  @property {string} flightId  @property {string} gate  @property {string} plannedGate
+ * @property {boolean} changed  @property {number} from  @property {number} to  @property {number} boardingFrom  @property {string} source
+ *
+ * @typedef {Object} AircraftType       ICAO type with seat configuration (GET /api/aircraft-types)
+ * @property {string} icao  @property {string} name  @property {'regional'|'narrow'|'wide'} body  @property {Object<string,number>} seatConfig
+ *
+ * @typedef {Object} Impression         Aggregated per campaign x screen x hour (table `impressions`, GET /api/impressions)
+ * @property {string} date  @property {number} hour  @property {string} campaignId  @property {string} screenId
+ * @property {number} plays  @property {number} impressions  @property {number} scans  @property {number} redemptions  @property {number} spend
+ *
+ * @typedef {Object} Terminal  @property {string} id  @property {string} name  @property {string} role
+ *
  * @typedef {Object} FlightEvent         From AIDX (IATA_AIDX_FlightLegNotifRQ)
  * @property {string} key  @property {string} type  // STATUS | DELAY | GATE_CHANGE | TIMES
  * @property {Object} changes  @property {number} at  @property {string} messageId

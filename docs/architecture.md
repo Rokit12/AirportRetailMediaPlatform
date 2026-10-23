@@ -43,7 +43,7 @@ flowchart LR
 - **Feeds drive state.** The AODB snapshot gives the schedule. Every later change (delay, gate change, boarding, departure) arrives as an AIDX message. Injected events are built as AIDX XML and travel the same parser, so the demo exercises the real ingestion path.
 - **Immediate re-planning.** When an AIDX event changes a flight, the screens whose catchment includes that gate are re-planned in the same tick rather than at the next slot. The SSE stream pushes a fresh snapshot within ~300 ms, which meets the 2-second cause-and-effect requirement.
 - **Jumps.** Jumping in time rebuilds the day: the schedule is reset, the feed messages up to the target time are replayed in order, and a back-fill of 10-minute windows estimates today's counters. This takes ~1 s for a full day.
-- **Persistence (server).** Master data, campaigns, creatives, promo codes, redemptions, incidents, settings and goodwill rules are written to SQLite on change. Live counters are recomputed from the simulation; real redemptions are replayed from the database.
+- **Persistence (server).** Master data (including terminals), campaigns, creatives, promo codes, redemptions, incidents, settings, goodwill rules and Impression records are written to SQLite. Live counters are recomputed from the simulation; real redemptions are replayed from the database.
 
 ## Passenger presence (`presence.js`)
 
@@ -69,10 +69,12 @@ A screen's crowd is the weighted sum of these contributions over its catchment (
 
 ## Data model
 
-The **canonical entities** are documented in `packages/core/src/model.js`. The platform-owned tables are in `apps/server/migrations/001_init.sql`:
+The **canonical entities** are documented in `packages/core/src/model.js`. The platform-owned tables are in `apps/server/migrations/` (`001_init.sql`, `002_terminals_impressions.sql`):
 
 - **`aodb_flights`** keeps all 33 source columns, exactly as the AODB sends them.
 - **Platform entities** keep indexed key columns plus a JSON document, so the model can evolve without a migration per field.
+- **`impressions`** stores the Impression entity aggregated per campaign × screen × hour (plays, impressions, scans, redemptions, live redemptions, spend). The server flushes changed rows every 5 seconds.
+- **GateAssignment** and **AircraftType** are derived from the AODB snapshot and AIDX updates and the aircraft reference list; they are served by the API rather than stored separately.
 
 ## Privacy
 

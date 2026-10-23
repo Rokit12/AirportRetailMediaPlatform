@@ -14,11 +14,11 @@ export function seed({ force = false } = {}) {
   const sampleCsv = fs.readFileSync(path.join(root, 'data/samples/MQI_aodb_flights_2026-10-14_SYNTHETIC.csv'), 'utf8');
   const d = buildData({ sampleCsv });
   db.exec('BEGIN');
-  for (const t of ['aodb_flights', 'advertisers', 'airlines', 'zones', 'gates', 'screens', 'outlets', 'campaigns', 'creatives', 'campaign_daily', 'promo_codes', 'redemptions', 'incidents', 'offers', 'packages', 'goodwill']) db.exec(`DELETE FROM ${t}`);
+  for (const t of ['aodb_flights', 'advertisers', 'airlines', 'zones', 'gates', 'screens', 'outlets', 'campaigns', 'creatives', 'campaign_daily', 'promo_codes', 'redemptions', 'incidents', 'offers', 'packages', 'goodwill', 'terminals', 'impressions']) db.exec(`DELETE FROM ${t}`);
   const ins = db.prepare(`INSERT INTO aodb_flights VALUES (${[...AODB_COLUMNS, 'planned_gate'].map(() => '?').join(',')})`);
   for (const f of d.flightsTruth) { const r = flightToRow(f); ins.run(...AODB_COLUMNS.map((c) => (r[c] === undefined || r[c] === null ? '' : String(r[c]))), f.plannedGateCode || ''); }
   for (const r of d.advertisers) put.advertisers(db, r); for (const r of d.airlines) put.airlines(db, r);
-  for (const r of d.layout.zones) put.zones(db, r); for (const r of d.layout.gates) put.gates(db, r);
+  for (const r of d.layout.terminals) put.terminals(db, r); for (const r of d.layout.zones) put.zones(db, r); for (const r of d.layout.gates) put.gates(db, r);
   for (const r of d.screens) put.screens(db, r); for (const r of d.outlets) put.outlets(db, r);
   for (const r of d.campaigns) put.campaigns(db, r); for (const r of d.creatives) put.creatives(db, r);
   for (const r of d.offers) put.offers(db, r); for (const r of d.packages) put.packages(db, r);

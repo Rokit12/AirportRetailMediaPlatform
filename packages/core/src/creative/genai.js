@@ -1,5 +1,5 @@
 // GenAI creative assistant. Default provider is an offline template engine (no API key needed);
-// a real LLM provider can be plugged in (server: ANTHROPIC_API_KEY; playground: claude.ai `sample`).
+// a real LLM provider can be plugged in on the server (AI_PROVIDER, see README).
 const PRODUCTS = [
   { re: /sweet|candy|confection|mithai|chocolate/i, en: 'Festive sweets', sw: 'Peremende za sikukuu', icon: 'sweets', category: 'confectionery', pal: ['#FFF1E6', '#4A2511', '#D9480F'] },
   { re: /coffee|latte|espresso|flat white/i, en: 'Fresh coffee', sw: 'Kahawa safi', icon: 'coffee', category: 'coffee', pal: ['#F3E9DC', '#2E1B0F', '#8B5E34'] },

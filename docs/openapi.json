@@ -364,6 +364,90 @@
         }
       }
     },
+    "/api/gate-assignments": {
+      "get": {
+        "summary": "GateAssignment entities (planned vs actual gate, occupancy window)",
+        "tags": [
+          "Flights"
+        ],
+        "operationId": "getApiGateassignments",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/aircraft-types": {
+      "get": {
+        "summary": "AircraftType entities with seat configuration and usage today",
+        "tags": [
+          "Flights"
+        ],
+        "operationId": "getApiAircrafttypes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/impressions": {
+      "get": {
+        "summary": "Impression records: aggregated per campaign x screen x hour (never per person)",
+        "tags": [
+          "Campaigns"
+        ],
+        "operationId": "getApiImpressions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/screens": {
       "get": {
         "summary": "All screens with status and what is playing",
@@ -1391,7 +1475,7 @@
     },
     "/api/creatives": {
       "get": {
-        "summary": "Creative library",
+        "summary": "Creative library (with validation result)",
         "tags": [
           "Creatives"
         ],
@@ -1423,6 +1507,98 @@
         ],
         "operationId": "postApiCreatives",
         "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/creatives/{id}": {
+      "put": {
+        "summary": "Update / re-upload a creative (clears a failed asset)",
+        "tags": [
+          "Creatives"
+        ],
+        "operationId": "putApiCreativesId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/creatives/{id}/approve": {
+      "post": {
+        "summary": "Approve or reject a creative with the brand-safety checklist",
+        "tags": [
+          "Creatives"
+        ],
+        "operationId": "postApiCreativesIdApprove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1778,7 +1954,7 @@
     },
     "/api/media/approvals": {
       "get": {
-        "summary": "Approval queue",
+        "summary": "Approval queue: campaigns and stand-alone creatives",
         "tags": [
           "Media"
         ],

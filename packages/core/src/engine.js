@@ -1,5 +1,5 @@
 // Simulation engine: one live clock, feeds through adapters, a decision per screen per slot, counters, incidents.
-// Identical code runs in the Node backend and (for the hosted playground) in the browser.
+// Identical code runs in the Node backend and (for the static demo build) in the browser.
 import { MIN, HOUR, DAY, round, fmtHM, iso, clamp } from './util/time.js';
 import { rng, h01, code as mkCode, hashStr } from './util/rand.js';
 import { AIRPORT, AIRLINES, SEGMENTS, OP_DATE, SEGMENT_MODEL_VERSION, AIRPORTS } from './reference.js';
@@ -9,6 +9,7 @@ import { decide } from './decision/pipeline.js';
 import { DEFAULT_RULES } from './decision/score.js';
 import { MockAgent } from './decision/ai.js';
 import { createAdapters, buildFlightLegNotif } from './adapters/index.js';
+import { validateCreative } from './creative/validate.js';
 
 const SLOT = 15_000; const WINDOW = 10 * MIN; const TRACK_SEGS = ['business', 'holiday', 'vfr', 'family', 'couple', 'solo', 'group', 'intl', 'domestic', 'premium', 'kids', 'seniors'];
 export const START_TIME = Date.parse(`${OP_DATE}T14:02:00Z`);
@@ -81,7 +82,7 @@ export class Engine {
     this.emit('rebuild', {});
   }
   resetCounters() {
-    this.cnt = { camp: new Map(), screen: new Map(), hourly: Array.from({ length: 24 }, () => ({ imps: 0, plays: 0, revenue: 0, red: 0 })) };
+    this.cnt = { camp: new Map(), screen: new Map(), imp: new Map(), impDirty: new Set(), hourly: Array.from({ length: 24 }, () => ({ imps: 0, plays: 0, revenue: 0, red: 0 })) };
     for (const r of this.liveRedemptions.filter((x) => x.t >= this.dayStart && x.t <= this.t)) this.countRedemption(r, false);
   }
   campCnt(id) { let c = this.cnt.camp.get(id); if (!c) { c = { plays: 0, imps: 0, scans: 0, red: 0, spend: 0, revenue: 0, liveRed: 0, seg: {}, hourly: Array.from({ length: 24 }, () => ({ imps: 0, red: 0, spend: 0 })), screens: new Map(), ab: {} }; this.cnt.camp.set(id, c); } return c; }
@@ -179,6 +180,20 @@ export class Engine {
     return { accepted: true, messages: msgs.length, buffered: msgs.length === 0 };
   }
   indexFaults() { this.faultsBy = new Map(); for (const f of this.faults) { if (!this.faultsBy.has(f.screenId)) this.faultsBy.set(f.screenId, []); this.faultsBy.get(f.screenId).push(f); } }
+  /** Simulate a creative whose asset fails to load on screens (CDN 404). */
+  injectCreativeFailure(creativeId) {
+    const cr = this.creatives.find((x) => x.id === creativeId); if (!cr) throw new Error('Unknown creative ' + creativeId);
+    cr.broken = { reason: 'Asset failed to load on player (HTTP 404 from media CDN)', at: this.t };
+    this.note('creative', `Creative ${creativeId} failed to load (injected)`);
+    const affected = [...this.screens.values()].filter((s) => this.screenState.get(s.id)?.now?.creativeId === creativeId);
+    this.runSlot(this.t, false, affected.length ? affected : null, 'replan'); return { ok: true, screens: affected.length };
+  }
+  repairCreative(creativeId, patch = {}) {
+    const cr = this.creatives.find((x) => x.id === creativeId); if (!cr) throw new Error('Unknown creative ' + creativeId);
+    const oldRev = cr.rev || 0; Object.assign(cr, patch); delete cr.broken; cr.rev = oldRev + 1;
+    for (const i of this.incidents) if (i.key.startsWith(`creative:${creativeId}:`) && i.status !== 'resolved') { i.status = 'resolved'; i.resolvedAt = this.t; }
+    this.persist('creative', cr); this.runSlot(this.t); return cr;
+  }
   injectScreenOffline(screenId, minutes = 12) { if (!this.screens.has(screenId)) throw new Error('Unknown screen ' + screenId); this.faults.push({ screenId, from: this.t, to: this.t + minutes * MIN, type: 'offline', injected: true }); this.indexFaults(); this.updateScreenHealth(this.t); this.note('screen', `${screenId} went offline (injected)`); this.runSlot(this.t, false, [this.screens.get(screenId)].filter(Boolean), 'replan'); }
   injectFeedLag(minutes = 8) { this.lagUntil = this.t + minutes * MIN; this.feedStats.AIDX.lastAt = this.t; this.note('feed', `AIDX feed lagging for ${minutes} min (injected): decisions citing AIDX will fail freshness checks`); }
   injectHallucination(screenId = '*', on = true) { if (on) this.agent.hallucinate.add(screenId); else this.agent.hallucinate.delete(screenId); this.note('ai', on ? `AI fault injection on ${screenId === '*' ? 'all screens' : screenId}: agent will cite a fabricated flight` : 'AI fault injection cleared'); if (on) this.runSlot(this.t, false, screenId === '*' ? null : [this.screens.get(screenId)].filter(Boolean), 'replan'); }
@@ -226,6 +241,7 @@ export class Engine {
       perfOf: (c) => this.perfOf(c), pacingOf: (c) => this.pacingOf(c, t), spentToday: (id) => this.cnt.camp.get(id)?.spend || 0, spentTotal: (id) => (this.cnt.camp.get(id)?.spend || 0) + this.histSpend(id),
       history: (sid) => { const st = this.screenState.get(sid); const hk = Math.floor(t / HOUR); if (st.hourKey !== hk) { st.hourKey = hk; st.hourCounts = new Map(); } return { last: st.last, hourCounts: st.hourCounts, streak: st.streak }; },
       flightById: (id) => this.flights.get(id),
+      creativeCheck: (c, s) => this.creativeCheck(c, s),
       evidenceFor: (profile, s) => this.evidenceFor(profile, s, t),
       feedAge: { AIDX: Math.round((t - this.feedStats.AIDX.lastAt) / 1000), ACRIS: Math.round((t - this.feedStats.ACRIS.lastAt) / 1000) },
     };
@@ -288,10 +304,28 @@ export class Engine {
     const aff = trueAffinity(c);
     let z = 0; for (const sg of TRACK_SEGS) z += (profile.shares[sg] || 0) * (aff[sg] || 1);
     for (const sg of TRACK_SEGS) { const sh = profile.shares[sg] || 0; const e = (k.seg[sg] ||= { imps: 0, red: 0 }); e.imps += imps * sh; e.red += z ? red * sh * (aff[sg] || 1) / z : 0; }
+    this.addImpression(c.id, s.id, hr, { plays: mult, imps, scans, red, spend });
     const sc = (this.cnt.screen.get(s.id) || { plays: 0, imps: 0, revenue: 0 }); sc.plays += mult; sc.imps += imps; sc.revenue += spend; this.cnt.screen.set(s.id, sc);
     const H = this.cnt.hourly[hr]; H.imps += imps; H.plays += mult; H.revenue += spend; H.red += red;
   }
-  pickCreative(c, sid, t) { const ids = c.creativeIds || []; if (ids.length < 2) return ids[0] || null; return ids[hashStr(sid + Math.floor(t / (2 * MIN))) % ids.length]; }
+  /** Approved creatives that pass validation. Failures raise one incident per creative. */
+  playableCreatives(c, screenId) {
+    const out = [];
+    for (const id of c.creativeIds || []) {
+      const cr = this.creatives.find((x) => x.id === id); if (!cr || cr.status !== 'approved') continue;
+      const errs = validateCreative(cr, ['en', this.settings.secondLanguage || 'sw']);
+      if (errs.length) { this.raiseIncident(`creative:${id}:${cr.rev || 0}`, { severity: 'high', title: `Failed creative ${id} (${c.name}): ${errs[0]}`, area: 'Creatives', owner: 'Media desk', creativeId: id, campaignId: c.id, screenId }); continue; }
+      out.push(id);
+    }
+    return out;
+  }
+  creativeCheck(c, s) {
+    if (!(c.creativeIds || []).length) return null; // house / text-only campaigns
+    if (this.playableCreatives(c, s.id).length) return null;
+    const anyApproved = (c.creativeIds || []).some((id) => this.creatives.find((x) => x.id === id)?.status === 'approved');
+    return anyApproved ? 'Creative failed validation: slot skipped' : 'No approved creative';
+  }
+  pickCreative(c, sid, t) { const ids = this.playableCreatives(c, sid); if (ids.length < 2) return ids[0] || null; return ids[hashStr(sid + Math.floor(t / (2 * MIN))) % ids.length]; }
   backfill(from, to, replay = []) {
     let ri = 0;
     for (let w = from; w < to; w += WINDOW) {
@@ -347,7 +381,20 @@ export class Engine {
     this.emit('tick', {});
     return { ok: true, redemption: r, promo: p };
   }
-  countRedemption(r, live) { const k = this.campCnt(r.campaignId); k.red += 1; k.scans += 1; k.liveRed += 1; k.revenue += r.value; const hr = new Date(r.t).getUTCHours(); k.hourly[hr].red += 1; this.cnt.hourly[hr].red += 1; }
+  /** Impression entity: one row per campaign x screen x hour of the operating day (aggregated, never per person). */
+  addImpression(cid, sid, hr, v) {
+    const key = `${cid}|${sid}|${hr}`; let row = this.cnt.imp.get(key);
+    if (!row) { row = { date: new Date(this.dayStart).toISOString().slice(0, 10), hour: hr, campaignId: cid, screenId: sid, plays: 0, impressions: 0, scans: 0, redemptions: 0, liveRedemptions: 0, spend: 0 }; this.cnt.imp.set(key, row); }
+    row.plays += v.plays || 0; row.impressions += v.imps || 0; row.scans += v.scans || 0; row.redemptions += v.red || 0; row.liveRedemptions += v.live || 0; row.spend += v.spend || 0;
+    this.cnt.impDirty.add(key);
+  }
+  impressionRows({ campaign, screen, hour } = {}) {
+    const out = [];
+    for (const r of this.cnt.imp.values()) { if ((campaign && r.campaignId !== campaign) || (screen && r.screenId !== screen) || (hour != null && hour !== '' && r.hour !== Number(hour))) continue; out.push({ ...r, plays: Math.round(r.plays), impressions: Math.round(r.impressions), scans: Math.round(r.scans * 10) / 10, redemptions: Math.round(r.redemptions * 10) / 10, spend: Math.round(r.spend * 100) / 100 }); }
+    return out.sort((a, b) => a.hour - b.hour || b.impressions - a.impressions);
+  }
+  takeDirtyImpressions() { const keys = [...this.cnt.impDirty]; this.cnt.impDirty.clear(); return keys.map((k) => this.cnt.imp.get(k)).filter(Boolean); }
+  countRedemption(r, live) { if (r.screenId) this.addImpression(r.campaignId, r.screenId, new Date(r.t).getUTCHours(), { scans: 1, red: 1, live: 1 }); const k = this.campCnt(r.campaignId); k.red += 1; k.scans += 1; k.liveRed += 1; k.revenue += r.value; const hr = new Date(r.t).getUTCHours(); k.hourly[hr].red += 1; this.cnt.hourly[hr].red += 1; }
   shareCode(code) {
     const p = this.promoCodes.get(code); if (!p) throw new Error('Unknown code');
     if (this.t > p.expiresAt) throw new Error('Code expired');

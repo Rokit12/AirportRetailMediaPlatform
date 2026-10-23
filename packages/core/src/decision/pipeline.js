@@ -34,6 +34,7 @@ function hardFilter(c, s, profile, env) {
   const t = env.t; const hr = env.hour ?? new Date(t).getUTCHours();
   if (!placementMatch(c, s)) return 'Not booked on this screen';
   if (c.approval?.state !== 'approved') return 'Awaiting approval';
+  const crReason = env.creativeCheck?.(c, s); if (crReason) return crReason;
   const sch = c.schedule || {};
   const ss = sch._s ?? (sch._s = sch.start ? Date.parse(sch.start) : -Infinity), se = sch._e ?? (sch._e = sch.end ? Date.parse(sch.end) : Infinity);
   if (t < ss) return 'Outside schedule (not started)';

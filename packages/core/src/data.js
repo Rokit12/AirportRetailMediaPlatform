@@ -1,4 +1,4 @@
-// Assemble the full seed dataset (used by the server seed script and by the in-browser playground).
+// Assemble the full seed dataset (used by the server seed script and by the static demo build).
 import { buildLayout } from './layout.js';
 import { generateDay } from './generator/flights.js';
 import { generateScreens, generateOutlets, buildCampaigns, buildHistory, ADVERTISERS, OFFERS, PACKAGES } from './generator/platform.js';
