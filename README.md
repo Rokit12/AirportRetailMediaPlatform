@@ -11,6 +11,7 @@ airports, airlines or brands, and no per-passenger data anywhere in the system.
 | | |
 |---|---|
 | **Hosted playground** | https://airportretailmediaplatform.onrender.com/ (full client–server build, pre-configured; phones can scan the QR codes) |
+| **Demo video** | [`docs/media/Gateline-demo.mp4`](docs/media/Gateline-demo.mp4): 3 min 39 s, narrated, with captions ([chapters](#demo-video-3-min-39-s-narrated)) |
 | **Local, one command** | `docker compose up` → http://localhost:8080 |
 | **Without Docker** | `npm install && npm start` → http://localhost:8080 (Node 22.5+) |
 | **API spec** | `docs/openapi.json` or `GET /api/openapi.json` |
@@ -18,19 +19,50 @@ airports, airlines or brands, and no per-passenger data anywhere in the system.
 
 ---
 
-## 1. What to look at in a 15-minute demo
+## 1. Demo
 
-The full script is in [`docs/demo-script.md`](docs/demo-script.md). The 60-second version:
+### Demo video (3 min 39 s, narrated)
 
-1. **Passenger → Gate 42 holdroom.** At 14:02, Saffron Gulf's upgrade offer is playing because XY501 is in its boarding window (airline priority rule).
-2. **Press "Delay XY501 +45 min"** in the simulation bar. An IATA AIDX `FlightLegNotifRQ` is built and pushed through the AIDX adapter. Within one tick:
-   - the FIDS strip shows *Delayed 15:20*;
-   - the screen switches to *Duty-free fragrance, 15% off*, because the retailer's trigger rule (Gulf flight delayed 30+ min at gates 40–45 → ×1.5) fires;
-   - the airline view shows the delay;
-   - the zone's footfall forecast rises because XY501's passengers now stay airside 45 minutes longer.
-3. **Press "Why this ad?"** to see the crowd profile bars, the top 3 candidates with scores, the winning rule, and the AI verification checks with the full evidence trail.
-4. **Scan the QR with a phone** (or click it). Redeem the code, and the redemption lands on *Retailer → Meridian Duty Free* within a second. You can also *Share with family* to issue a second code.
-5. **Split screen** (header) puts the passenger screen on the left and any dashboard on the right.
+[![Gateline narrated product demo](docs/media/demo-poster.jpg)](docs/media/Gateline-demo.mp4)
+
+**[Watch the demo (MP4, 1080p, 21 MB)](docs/media/Gateline-demo.mp4)** · captions: [`Gateline-demo.srt`](docs/media/Gateline-demo.srt) (also embedded in the MP4 as a subtitle track)
+
+A real screen recording of this build on a fresh database, narrated end to end. Chapters:
+
+| Time | What you see |
+|---|---|
+| 0:04 | What Gateline is, and the three airport feeds (AODB, IATA AIDX, ACI ACRIS), each behind an adapter |
+| 0:28 | **Platform Admin:** live network map with screen health and passenger heat; presence per zone in 5-minute windows |
+| 0:49 | **Passenger screen, Gate 42:** Saffron Gulf's upgrade plays because XY501 is in its boarding window (airline priority) |
+| 1:06 | **Cause and effect in split screen:** an injected AIDX delay on XY501 updates the airline view and switches the gate screen to *Duty-free fragrance, 15% off* in under a second |
+| 1:31 | **Why this ad?** Crowd profile, top 3 candidates with scores, and the AI verification checks |
+| 1:54 | **Mobile claim:** countdown tied to XY501's boarding close, share-to-family code, redeem |
+| 2:06 | **Retailer dashboard:** the redemption arrives in *Live redemptions* straight away |
+| 2:18 | **Campaign builder:** live audience-match preview and the best 3 slots for tomorrow |
+| 2:33 | **GenAI creative assistant:** a one-line brief becomes an ad page in English and Kiswahili, no API key |
+| 2:44 | **Media Manager:** inventory priced from predicted footfall, 7-day forecast, conflict view |
+| 2:56 | **Airline Rep:** delay goodwill pushes a co-funded meal voucher to the gate |
+| 3:08 | **AI safety:** a fabricated citation is rejected, the screen falls back to the rule-based choice, an incident is raised |
+| 3:19 | Kiswahili in one click, white-label theming, aggregated targeting only |
+
+The voice-over is generated with an open-source neural text-to-speech voice. For the recording, *Max consecutive plays* (Admin → Decision engine) was raised from 2 to 40, so the Gate 42 screen holds the fragrance offer through the claim instead of rotating to the next campaign; everything else is the default configuration.
+
+### Try it yourself in 60 seconds
+
+Open the [hosted playground](https://airportretailmediaplatform.onrender.com/) (or run it locally). The simulation starts at 14:02 on Wed 14 Oct 2026. The step-by-step 15-minute script is in [`docs/demo-script.md`](docs/demo-script.md).
+
+1. **Passenger → Gate 42 holdroom.** Saffron Gulf's upgrade offer is playing because XY501 is in its boarding window.
+2. **Split screen** (header), then pick **Airline Rep** so the airline view sits beside the passenger screen.
+3. **Press "Delay XY501 +45 min"** in the simulation bar. An IATA AIDX `FlightLegNotifRQ` goes through the AIDX adapter, and within one tick:
+   - the airline view shows the delay and the FIDS strip shows *Delayed 15:20*;
+   - the screen switches to *Duty-free fragrance, 15% off*: the retailer's trigger rule (Gulf flight delayed 30+ min at gates 40–45 → ×1.5) fires;
+   - footfall in the zone rises, because XY501's 240 passengers now stay airside 45 minutes longer.
+4. **Press "Why this ad?"** for the crowd profile, the top 3 candidates with scores, the winning rule and the evidence trail.
+5. **Scan the QR with a phone** (or click it). Share a family code, redeem, and the redemption lands on **Retailer → Meridian Duty Free** within a second.
+
+The gate screen rotates campaigns as it would in production (at most 2 consecutive plays by default), so if the code you scan belongs to another advertiser, its redemption appears on that retailer's dashboard. To hold one offer on screen while presenting, raise *Max consecutive plays* in **Admin → Decision engine**.
+
+### The worked example from the brief
 
 The **"Worked example" button** reproduces the challenge table exactly: Gate 42 at 14:10, XY501 to the Gulf hub (240 pax, +45 min) plus ZQ88 to a beach destination (180 pax). The resulting crowd is holiday 58%, family 31%, business 22%, international 57%, with a median dwell of 52 min.
 
@@ -144,7 +176,7 @@ packages/core/       engine, presence model, decision pipeline, adapters, genera
 apps/server/         Fastify API, SQLite migrations + seed, SSE stream, OpenAPI
 apps/web/            React app (5 roles, passenger simulator, mobile claim page); `--mode playground` builds the single-file hosted demo
 data/samples/        the challenge samples (AODB CSV, AIDX XML) + official ACRIS examples
-docs/                architecture, adapter guide, demo script, openapi.json
+docs/                architecture diagrams, adapter guide, demo script, openapi.json; docs/media/ holds the demo video, captions and poster
 ```
 
 ## 9. Known limits (POC)

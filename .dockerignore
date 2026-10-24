@@ -6,3 +6,4 @@ data/gateline.db*
 data/generated
 scratch
 .git
+docs/media

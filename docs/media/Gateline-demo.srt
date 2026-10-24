@@ -1,0 +1,187 @@
+1
+00:00:04,299 --> 00:00:08,242
+This is Gateline, a retail media platform for airport screens.
+
+2
+00:00:08,292 --> 00:00:14,489
+It puts the right offer on the right screen, for the passengers actually standing in front of it.
+
+3
+00:00:14,539 --> 00:00:18,547
+We are at Meridian International, a fictional two-terminal hub.
+
+4
+00:00:18,597 --> 00:00:21,702
+Every feed is mocked in its real industry format:
+
+5
+00:00:21,752 --> 00:00:27,949
+AODB flight movements, IATA AIDX messages, and ACI ACRIS queue data, each behind its own adapter.
+
+6
+00:00:28,610 --> 00:00:31,834
+The platform admin sees the whole network at a glance.
+
+7
+00:00:31,884 --> 00:00:35,472
+One hundred and eighty-two screens, each coloured by health,
+
+8
+00:00:35,522 --> 00:00:39,049
+with a heat overlay showing where passengers are right now.
+
+9
+00:00:39,099 --> 00:00:43,535
+Below, passenger presence is broken down per zone, in five-minute windows:
+
+10
+00:00:43,585 --> 00:00:48,930
+how many people, which nationalities, where they are flying, and how long they will stay.
+
+11
+00:00:49,582 --> 00:00:51,953
+Here is the screen at Gate forty-two.
+
+12
+00:00:52,003 --> 00:00:58,104
+It is showing Saffron Gulf's business upgrade, because flight XY501 is in its boarding window,
+
+13
+00:00:58,154 --> 00:01:01,048
+and an airline gets priority at its own gate.
+
+14
+00:01:01,098 --> 00:01:06,022
+Beside the ad is a live departures strip, and a promo code with a countdown.
+
+15
+00:01:06,678 --> 00:01:07,994
+Now, cause and effect.
+
+16
+00:01:08,044 --> 00:01:14,328
+In split-screen mode, with the airline view on the right, I inject a forty-five minute delay on XY501.
+
+17
+00:01:14,378 --> 00:01:17,495
+An IATA AIDX message goes through the feed adapter.
+
+18
+00:01:17,545 --> 00:01:23,642
+In under a second, the airline sees the delay, and the gate screen switches to duty-free fragrance.
+
+19
+00:01:23,692 --> 00:01:25,505
+The retailer's rule has fired:
+
+20
+00:01:25,555 --> 00:01:30,348
+a Gulf flight, delayed more than thirty minutes, at gates forty to forty-five.
+
+21
+00:01:31,008 --> 00:01:32,911
+Every decision can be explained.
+
+22
+00:01:32,961 --> 00:01:36,024
+Why this ad shows the crowd in front of the screen:
+
+23
+00:01:36,074 --> 00:01:39,503
+fifty-eight percent holiday, thirty-one percent families.
+
+24
+00:01:39,553 --> 00:01:42,371
+Then the top three candidates and their scores.
+
+25
+00:01:42,421 --> 00:01:49,146
+The AI proposed this ranking, but it only played after deterministic checks confirmed that every cited fact exi
+
+26
+00:01:49,196 --> 00:01:53,418
+sts in a trusted feed, is fresh, and that the score can be reproduced.
+
+27
+00:01:54,074 --> 00:01:55,719
+A passenger scans the code.
+
+28
+00:01:55,769 --> 00:02:01,807
+The claim page shows the offer, with a countdown tied to the moment their flight closes boarding.
+
+29
+00:02:01,857 --> 00:02:06,074
+They share a second code with family, then redeem it at the counter.
+
+30
+00:02:06,728 --> 00:02:12,173
+And the redemption lands on the retailer's dashboard straight away, next to live impressions,
+
+31
+00:02:12,223 --> 00:02:17,668
+scans and conversion, and a forecast of passenger flow near the store for the next two hours.
+
+32
+00:02:18,320 --> 00:02:20,589
+Retailers build campaigns themselves.
+
+33
+00:02:20,639 --> 00:02:26,606
+As they pick zones and audience weights, a live preview estimates how well they match the crowd,
+
+34
+00:02:26,656 --> 00:02:31,620
+the expected impressions and redemptions, and the best three slots for tomorrow.
+
+35
+00:02:33,295 --> 00:02:39,522
+The creative assistant turns a one-line brief into a ready ad page, in English and Kiswahili,
+
+36
+00:02:39,572 --> 00:02:41,075
+with no API key needed.
+
+37
+00:02:44,081 --> 00:02:49,412
+The media manager sees every screen and every hour, priced from predicted footfall,
+
+38
+00:02:49,462 --> 00:02:51,617
+with a seven-day revenue forecast.
+
+39
+00:02:51,667 --> 00:02:55,701
+A conflict view explains exactly why one campaign beat another.
+
+40
+00:02:56,353 --> 00:03:00,106
+Airlines see their own flights and can automate delay goodwill.
+
+41
+00:03:00,156 --> 00:03:05,719
+When a departure runs late past a threshold, a meal voucher, co-funded with a coffee partner,
+
+42
+00:03:05,769 --> 00:03:08,013
+is pushed to the screens at that gate.
+
+43
+00:03:08,666 --> 00:03:13,800
+If the AI ever cites something that is not in a trusted feed, the verifier rejects it.
+
+44
+00:03:13,850 --> 00:03:19,046
+The screen falls back to the rule-based choice, and an incident is raised for the team.
+
+45
+00:03:19,697 --> 00:03:25,702
+The whole interface switches to Kiswahili in one click, and the product is fully white-label.
+
+46
+00:03:25,752 --> 00:03:30,780
+Targeting is aggregated by flight, zone and time window only, never by person.
+
+47
+00:03:30,830 --> 00:03:32,277
+This has been Gateline.
